@@ -1,4 +1,6 @@
 import { caravanMaster, sendCaravan } from './caravan';
+import { borderFriction, clearWar, frictionReasons, negotiate, setTransfer } from './warfare';
+import { demonsServing } from './demons';
 import { CAMP_MAX, ensureCamp, sendToCamp } from './camps';
 import { faithWarFactor, faithWarReasons } from './religion';
 import { inheritKnown, knownYears, knows } from './contact';
@@ -70,7 +72,7 @@ export function aggregate(w: World, f: Faction): void {
   if (f.flags.includes('ancient_magic')) bonus += 0.25;
   if (hasFlag(f, 'waaagh', w.t)) bonus += 0.3;
   if (f.flags.some(x => x.startsWith('patron:'))) bonus += 0.4;
-  if (w.demonLord >= 0 && w.chars[w.demonLord]?.faction === f.id) bonus += 0.5;
+  if (w.demonLord >= 0 && w.chars[w.demonLord]?.faction === f.id) bonus += 0.5 + Math.min(0.5, demonsServing(w, w.demonLord) * 0.06);
   f.pop = pop;
   f.avgDev = pop > 0 ? dev / pop : 0;
   f.military = mil * bonus;
@@ -371,7 +373,7 @@ function warReason(w: World, a: Faction, b: Faction, ld: Character): string {
     return pick([`${when} ${g.why}의 원한을 갚을 때가 왔다.`, `${ld.name}은(는) ${when} ${g.why}을(를) 잊지 않았다.`, `${g.why}의 기억이 아직 생생하였다. 복수의 북이 울렸다.`]);
   }
   // 해당하는 명분을 모두 모은 뒤 그중 하나를 고른다 (한 가지 명분이 모든 전쟁을 차지하지 않도록)
-  const why: string[] = [...faithWarReasons(w, a, b)];
+  const why: string[] = [...faithWarReasons(w, a, b), ...frictionReasons(w, a, b, isNeighbor(w, a, b))];
   if (a.flags.includes('food_crisis')) why.push(`굶주린 백성들이 ${b.name}의 곡창을 노렸다.`, '곳간이 비자 칼끝이 이웃의 들판을 향하였다.');
   if (Object.keys(b.wars).length >= 2) why.push(`사방에서 공격받는 ${b.name}을(를) 칠 절호의 기회라 여겼다.`, `${b.name}이(가) 여러 적과 싸우는 틈을 노렸다.`);
   if (t[PRIDE] > 70) why.push(`${ld.name}은(는) 모욕을 결코 잊지 않았다.`, `${b.name}의 사신이 무례하였다. ${ld.name}은(는) 그 자리에서 칼을 뽑았다.`, `${ld.name}은(는) 자존심에 난 상처를 피로 씻으려 하였다.`);
@@ -388,6 +390,7 @@ function warReason(w: World, a: Faction, b: Faction, ld: Character): string {
 export function makePeace(w: World, a: Faction, b: Faction): void {
   const began = a.wars[b.id] ?? w.t;
   delete a.wars[b.id]; delete b.wars[a.id];
+  clearWar(a, b);
   const until = w.t + w.rngSim.int(60, 150);
   a.truce[b.id] = until; b.truce[a.id] = until;
   addFacRel(w, a, b, 25);
@@ -447,7 +450,18 @@ export function tradeRoute(w: World, a: Faction, b: Faction): { d: number; sea: 
   m.set(k, r);
   return r;
 }
-const TRADE_REACH = 110;
+// 이보다 먼 교역로는 열지 않는다 (먼 길은 짐이 상하고 도적이 많다)
+const TRADE_REACH = 80;
+
+/** 국경을 맞댄 이웃 (해마다 다시 잰다: 땅을 훑는 일이라 매달 하기엔 무겁다) */
+const nbCache = new WeakMap<World, Map<number, { t: number; ids: Set<number> }>>();
+export function isNeighbor(w: World, a: Faction, b: Faction): boolean {
+  let m = nbCache.get(w);
+  if (!m) { m = new Map(); nbCache.set(w, m); }
+  let c = m.get(a.id);
+  if (!c || w.t - c.t >= 12 || w.t < c.t) { c = { t: w.t, ids: new Set(borderNeighbors(w, a).map(o => o.id)) }; m.set(a.id, c); }
+  return c.ids.has(b.id);
+}
 
 export function pWarMonth(w: World, a: Faction, b: Faction): number {
   if (a === b || !a.alive || !b.alive || atWar(a, b.id)) return 0;
@@ -471,7 +485,9 @@ export function pWarMonth(w: World, a: Faction, b: Faction): number {
   const powerF = ratio < 0.8 ? ratio * 0.25 : Math.min(2.5, ratio);
   const d = facDist(w, a, b);
   if (!isFinite(d)) return 0;
-  const distF = d < 30 ? 1 : Math.exp(-(d - 30) / 20);
+  // 전쟁은 대개 이웃끼리: 국경을 맞댄 나라는 더 자주, 멀리 있는 나라는 훨씬 드물게
+  const neighbor = isNeighbor(w, a, b);
+  const distF = (neighbor ? 1.5 : 1) * (d < 25 ? 1 : Math.exp(-(d - 25) / 12));
   const warsF = 1 / (1 + Object.keys(a.wars).length * 1.5);
   const pile = special === 1 ? Math.pow(0.7, Object.keys(b.wars).length) : 1;
   const hunger = a.flags.includes('food_crisis') ? 1.6 : 1;
@@ -516,7 +532,9 @@ export function factionMonth(w: World, f: Faction): void {
     const amt = Math.min(a.stock[t.give] * 0.06, 6 + a.pop / 150);
     // 교역에는 반드시 사람이 든다: 한 해에 한 번, 한 해치 짐을 싣고 떠난다
     if (w.t % 12 === (f.id + t.with) % 12) {
-      const shipment = Math.min(a.stock[t.give] * 0.5, amt * 12);
+      // 멀수록 실어 나르는 양이 준다
+      const eff = Math.max(0.35, Math.min(1, 1.25 - route.d / 80));
+      const shipment = Math.min(a.stock[t.give] * 0.5, amt * 12 * eff);
       if (route.sea) {
         // 뱃길은 상인이 배를 빌려 띄운다 (배는 지도에 그리지 않는다)
         const master = caravanMaster(w, f, a);
@@ -541,7 +559,7 @@ export function factionMonth(w: World, f: Faction): void {
 
   // 영주 임명
   assignGovernors(w, f);
-  if (w.t % 12 === f.id % 12) updatePosture(w, f, borderNeighbors(w, f));
+  if (w.t % 12 === f.id % 12) { const nb = borderNeighbors(w, f); updatePosture(w, f, nb); borderFriction(w, f, nb); }
 
   // 식량 위기 표시
   const foodM = stockMonths(w, f, FOOD);
@@ -571,7 +589,11 @@ export function factionMonth(w: World, f: Faction): void {
     // 연맹이 맞서는 적(마왕 등)과는 연맹이 살아 있는 동안 따로 강화하지 않는다 (강화했다가 다음 달 다시 선포하는 일을 막는다)
     const swornBy = (m: Faction, foe: Faction) => w.alliances.some(al => al.alive && al.members.includes(m.id) && w.chars[al.enemy]?.died < 0 && w.chars[al.enemy]?.faction === foe.id);
     const sworn = swornBy(f, e) || swornBy(e, f);
-    if (!treeHeld && !sworn && rng.chance(pPeace)) makePeace(w, f, e);
+    const dlWar = w.demonLord >= 0 && (w.chars[w.demonLord]?.faction === f.id || w.chars[w.demonLord]?.faction === e.id);
+    if (treeHeld || sworn) continue;
+    if (dlWar) { if (rng.chance(pPeace)) makePeace(w, f, e); continue; }
+    // 반년에 한 번, 밀리는 쪽이 조건을 내걸고 강화를 청한다
+    if (f.id < e.id && w.t % 6 === (f.id + e.id) % 6) negotiate(w, f, e, makePeace);
   }
   if (!wars.length) f.warWeariness = Math.max(0, f.warWeariness - 1);
 
@@ -653,7 +675,8 @@ function tryTrade(w: World, f: Faction, need: number): boolean {
     && !f.treaties.some(t => t.with === o.id) && facDist(w, f, o) < 70 && surplus(o, need) > 8)
     .filter(o => tradeRoute(w, f, o).d <= TRADE_REACH);
   if (!partners.length) return false;
-  const o = rng.weighted(partners, p => 50 + facRel(f, p.id))!;
+  // 가까운 상대일수록 이문이 남는다: 거리에 따라 크게 줄어드는 무게로 고른다
+  const o = rng.weighted(partners, p => (50 + facRel(f, p.id)) * Math.exp(-tradeRoute(w, f, p).d / 25))!;
   // 상대가 원하는 것
   let give = -1, gm = 0;
   for (let r = 0; r < RES_COUNT; r++) {
@@ -783,7 +806,7 @@ export function homelessMonth(w: World, c: Character): void {
   const rng = w.rngSim;
   if (c.home >= 0 && w.settlements[c.home]?.alive && c.faction >= 0) return;
   // 열강은 어느 나라에도 깃들지 않는다
-  if (c.race === 'dragon' || c.act.kind !== 'idle' || c.paragon) return;
+  if (c.race === 'dragon' || c.act.kind !== 'idle' || c.paragon || c.archdemon) return;
   // 나라를 잃은 '나'는 먼저 스스로 거취를 고른다 (한 해 동안은 기다린다)
   if (c.isPlayer && w.player && ['peril_fall', 'peril_fallen'].some(k => (w.player!.flags?.[k] ?? -99) >= w.t - 12)) return;
   if (c.faction >= 0 && w.factions[c.faction]?.alive) {
@@ -804,3 +827,6 @@ export function homelessMonth(w: World, c: Character): void {
 }
 
 
+
+// 강화 조건으로 고을을 넘길 때 쓴다
+setTransfer((w, s, f) => transferSettlement(w, s, f));

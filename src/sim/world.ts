@@ -1,4 +1,5 @@
 import { Rng, hashString } from '../core/rng';
+import { seedDemons } from './demons';
 import { RACES, RACE_KEYS, type RaceKey } from '../data/races';
 import * as T from '../data/terrain';
 import { TERRAIN } from '../data/terrain';
@@ -32,6 +33,7 @@ export function createWorld(seed: string): World {
   };
   startEra(w);
   placeFactions(w, new Rng(seed + ':place'));
+  seedDemons(w);
   for (const s of w.settlements) claimInitial(w, s, 2);
   for (let i = 0; i < 5; i++) spawnDragon(w, false);
   recomputeTerritory(w);

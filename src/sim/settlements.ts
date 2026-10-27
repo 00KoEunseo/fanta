@@ -65,7 +65,8 @@ export function capacity(w: World, s: Settlement): number {
   const mul = 1 + s.dev / 100;
   const byFood = R.needs[FOOD] > 0 ? (food * R.prodMul[FOOD] * mul * 0.95 / R.needs[FOOD]) * 20 : Infinity;
   const byMana = R.needs[MANA] >= 0.15 ? (mana * R.prodMul[MANA] * mul / R.needs[MANA]) * 20 * 1.2 : Infinity;
-  const cap = Math.min(byFood, byMana);
+  // 마족은 수가 적다 (대신 하나하나가 강하다)
+  const cap = Math.min(byFood, byMana) * (s.race === 'majin' ? 0.45 : 1);
   return Math.max(60, isFinite(cap) ? cap : 400);
 }
 
@@ -99,6 +100,11 @@ export function settlementMonth(w: World, s: Settlement): void {
       // 땅에서 곡식이 나지 않는 지하와 마계: 버섯 농사와 굴짐승 사냥으로 끼니를 스스로 잇는다
       // (교역이 열리기 전에도 굶어 죽지 않도록. 남는 땅의 소출과 교역이 곧 여유가 된다)
       if (s.l >= 3) p += R.needs[FOOD] * s.pop / 20;
+      // 세상이 막 열렸을 때는 주인 없는 들판이 넓어 사냥과 채집으로 모자란 끼니를 메운다 (땅이 차는 30년에 걸쳐 사라진다)
+      else {
+        const forage = Math.max(0, 0.7 - w.t / (12 * 43));
+        if (forage > 0) p += Math.max(0, R.needs[FOOD] * s.pop / 20 - p) * forage;
+      }
       if (hasFlag(s, 'drought', w.t)) p *= 0.35;
       if (hasFlag(s, 'blessed', w.t)) p *= 1.4;
     }

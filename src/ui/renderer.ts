@@ -457,7 +457,7 @@ export class MapRenderer {
         if (c.act.kind === 'army' || c.act.kind === 'colonize' || c.act.kind === 'voyage' || c.act.kind === 'fleet') continue;
         // 상단을 이끄는 이는 수레로 그린다 (군대 표시를 끄면 사람으로 보인다)
         if ((c.act.kind === 'caravan' || c.act.kind === 'camp') && this.showArmies) continue;
-        const special = c.race === 'dragon' || isHero(c) || w.demonLord === c.id || c.isPlayer || c.id === this.selectedChar || w.factions[c.faction]?.leader === c.id || !!c.paragon;
+        const special = c.race === 'dragon' || isHero(c) || w.demonLord === c.id || c.isPlayer || c.id === this.selectedChar || w.factions[c.faction]?.leader === c.id || !!c.paragon || !!c.archdemon;
         // 개간하러 나간 이들은 멀리서도 보인다 (땅이 넓어지는 모습)
         const working = false;
         if (!special && !working && s < 6) continue;

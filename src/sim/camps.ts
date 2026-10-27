@@ -1,6 +1,7 @@
 // 주둔지와 전선: 먼 적국을 칠 때는 국경 길목에 주둔지를 세우고, 병력을 모아 거기서 출격한다.
 // 출격한 군대는 싸움이 끝나면 주둔지로 돌아온다. 주둔지는 고향에서 양식을 받고, 끊기면 병사가 흩어진다.
 // 적의 군대가 다가오면 주둔지를 두고 싸운다. 전쟁이 끝나면 병사들은 집으로 돌아간다.
+import { warScore } from './warfare';
 import { RACES } from '../data/races';
 import { FOOD } from '../data/terrain';
 import type { Army, Character, Faction, Pos, Settlement, World } from './state';
@@ -151,9 +152,11 @@ export function campsMonth(w: World): void {
         raider.soldiers *= 0.75;
         addNews(w, `${e.name}의 군대가 ${f.name}의 ${camp.name}을(를) 짓밟았다. 살아남은 병사들은 흩어졌다.`, 3, 'war', { pos: camp, facs: [f.id, e.id] });
         if (cmd && cmd.died < 0 && rng.chance(0.3)) { cmd.act = { kind: 'idle' }; killChar(w, cmd, `${camp.name} 함락 때 전사`); }
+        warScore(w, e, f, 10);
         breakCamp(w, camp, '');
         continue;
       }
+      warScore(w, f, e, 4);
       raider.soldiers *= 0.55; camp.soldiers *= 0.85;
       addNews(w, `${f.name}의 ${camp.name}이(가) ${e.name}의 공격을 막아냈다.`, 2, 'war', { pos: camp, facs: [f.id, e.id] });
     }

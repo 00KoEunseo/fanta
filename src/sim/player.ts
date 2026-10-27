@@ -47,7 +47,8 @@ export interface PlayerOpts {
   faction?: number;
 }
 
-export const PLAYABLE: RaceKey[] = ['human', 'elf', 'darkelf', 'dwarf', 'goblin', 'kobold', 'orc', 'beast', 'majin', 'demon'];
+// 악마는 나라 없이 정해진 예순여섯뿐이라 태어날 수 없다
+export const PLAYABLE: RaceKey[] = ['human', 'elf', 'darkelf', 'dwarf', 'goblin', 'kobold', 'orc', 'beast', 'majin'];
 
 export function birthplaces(w: World, race: RaceKey): Settlement[] {
   return w.settlements.filter(s => s.alive && s.race === race && w.factions[s.faction]?.alive);

@@ -1,4 +1,5 @@
 import { relocate } from './characters';
+import { warScore } from './warfare';
 import { clearMonth } from './pioneer';
 import { dist } from './state';
 import { RACES } from '../data/races';
@@ -229,6 +230,7 @@ function arrive(w: World, a: Army): void {
       for (const r of [FOOD, GOLD, ORE]) { const take = s.stock[r] * 0.45; s.stock[r] -= take; a.loot[r] += take; }
       s.stability = clamp(s.stability - 12);
       if (def) addFacRel(w, f, def, -15);
+      warScore(w, f, def, 3);
       aggrieve(w, def, f, `${s.name}이(가) 약탈당한 일`);
       let captives = 0;
       if (allowsSlavery(w, f)) {
@@ -279,6 +281,7 @@ function arrive(w: World, a: Army): void {
     w.corpses += lossA + lossD;
     const govHere = !!gov && gov.died < 0 && gov.l === s.l && dist(gov, s) <= 4;
     if (govHere) { gov!.fame += 8; charLog(w, gov!, `${f.name}의 공격으로부터 ${s.name}을(를) 지켜냈다.`, 2); }
+    warScore(w, def, f, a.goal === 'raid' ? 2 : 5);
     addNews(w, `${s.name}이(가) ${f.name}의 ${a.goal === 'raid' ? '약탈대' : '공격'}을(를) 막아냈다.`, a.goal === 'raid' ? 1 : 2, 'war', { pos: s, facs: [f.id, s.faction] });
     if (cmd && cmd.died < 0) {
       if (rng.chance(0.18)) killChar(w, cmd, `${s.name} 공략전에서 전사`, govHere ? gov : undefined);
@@ -299,6 +302,7 @@ function fieldBattle(w: World, a: Army, b: Army): void {
   win.soldiers -= win.soldiers * rng.float(0.05, 0.25);
   w.corpses += losses;
   const fw = w.factions[win.faction], fl = w.factions[lose.faction];
+  warScore(w, fw, fl, 8);
   const cw = w.chars[win.commander], cl = w.chars[lose.commander];
   addNews(w, `${fw.name}의 군대가 들판에서 ${fl.name}의 군대를 격파하였다.`, 3, 'war', { pos: win, facs: [fw.id, fl.id], chars: [cw?.id, cl?.id].filter((x): x is number => x !== undefined) });
   if (cw && cw.died < 0) { cw.fame += 10; charLog(w, cw, `${fl.name}의 군대를 야전에서 격파하였다.`, 2); }
@@ -313,6 +317,7 @@ export function captureSettlement(w: World, s: Settlement, f: Faction, by?: Char
   const rng = w.rngSim;
   const old = w.factions[s.faction];
   const wasCapital = old && old.capital === s.id;
+  warScore(w, f, old, wasCapital ? 50 : 30);
   transferSettlement(w, s, f);
   s.stability = 25;
   if (allowsSlavery(w, f) && old && old.race !== f.race) {

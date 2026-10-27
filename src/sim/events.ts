@@ -762,11 +762,11 @@ ev({
 ev({
   id: 'resurgence', scope: 'world',
   p: w => {
-    const dead = POP_RACES.filter(r => r !== 'undead' && r !== 'angel' && !w.factions.some(f => f.alive && f.race === r));
+    const dead = POP_RACES.filter(r => r !== 'undead' && r !== 'angel' && r !== 'demon' && !w.factions.some(f => f.alive && f.race === r));
     return dead.length ? 0.004 * dead.length : 0;
   },
   fire: w => {
-    const dead = POP_RACES.filter(r => r !== 'undead' && r !== 'angel' && !w.factions.some(f => f.alive && f.race === r));
+    const dead = POP_RACES.filter(r => r !== 'undead' && r !== 'angel' && r !== 'demon' && !w.factions.some(f => f.alive && f.race === r));
     const lastFell = (r: RaceKey) => Math.max(...w.factions.filter(f => f.race === r).map(f => f.fell));
     const ready = dead.filter(r => w.t - lastFell(r) > 240);
     if (!ready.length) return;

@@ -151,7 +151,7 @@ race({
 race({
   key: 'majin', name: '마족', glyph: 'M', color: '#b84ee0', layers: [L_DEMON],
   prefer: { [Tr.BLOODMIRE]: 3, [Tr.ASH]: 2, [Tr.BRIMSTONE]: 2 },
-  moveOverride: {}, lifespan: [480, 90], adult: 30, growth: 0.0026,
+  moveOverride: {}, lifespan: [480, 90], adult: 30, growth: 0.0016,
   needs: [0.9, 0.05, 0.05, 0.05, 0.1, 0.02], prodMul: [1, 0.8, 1, 1.2, 1.4, 1], flying: false,
   aggression: 0.8, trade: 0.3, might: 1.5, magic: 1.4, align: 'dark', startFactions: 2, startPop: [100, 170],
   aptBias: [5, -20, 25, 5, 0, 10], traitBias: { 1: 15, 3: -10, 9: 10 },
@@ -186,7 +186,8 @@ race({
   prefer: { [Tr.BRIMSTONE]: 3, [Tr.BLOODMIRE]: 2, [Tr.ASH]: 2 },
   moveOverride: {}, lifespan: [700, 120], adult: 20, growth: 0.003,
   needs: [0.8, 0.02, 0.03, 0.05, 0.12, 0.01], prodMul: [0.9, 0.6, 1, 1.2, 1.3, 1], flying: false,
-  aggression: 1, trade: 0.1, might: 1.6, magic: 1.2, align: 'dark', startFactions: 2, startPop: [110, 170],
+  // 악마는 나라를 이루지 않는다: 세상이 열릴 때 정해진 예순여섯이 개인으로 산다 (demons.ts)
+  aggression: 1, trade: 0.1, might: 1.6, magic: 1.2, align: 'dark', startFactions: 0, startPop: [110, 170],
   aptBias: [0, -30, 30, -5, -10, 20], traitBias: { 2: 15, 3: -30, 1: 10 },
   settlementTiers: ['소환진', '악마 소굴', '불지옥 마을', '지옥 요새', '불타는 옥좌'],
   titles: ['두목', '악마공', '악마군주', '대악마'],

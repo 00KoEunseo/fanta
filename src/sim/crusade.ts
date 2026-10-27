@@ -117,7 +117,8 @@ function inParty(w: World, c: Character): boolean {
 
 function canFight(w: World, c: Character, enemy: Character): boolean {
   if (c.died >= 0 || c.isPlayer || c.race === 'dragon' || !isAdult(w, c) || inParty(w, c) || c.act.kind !== 'idle') return false;
-  if (c.officer || w.demonLord === c.id || c.role === '노예') return false;
+  // 악마와 열강은 남의 토벌대에 끼지 않는다 (제 뜻대로 움직인다)
+  if (c.officer || w.demonLord === c.id || c.role === '노예' || c.archdemon || c.paragon) return false;
   if (w.factions[c.faction]?.leader === c.id) return false;
   if (w.demonLord === enemy.id && RACES[c.race].align === 'dark') return false;
   if (enemy.patronOf !== undefined && c.faction === enemy.patronOf) return false;

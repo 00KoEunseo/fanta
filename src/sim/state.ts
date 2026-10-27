@@ -126,6 +126,8 @@ export interface Faction {
   realms?: number[];
   /** 누군가 만나 보았지만 아직 소식이 닿지 않은 세력 */
   heard?: Record<number, number>;
+  /** 싸우는 상대별 전쟁 점수 (강화 협상에 쓴다) */
+  warState?: Record<number, import('./warfare').WarState>;
   /** 다른 세력에게 품은 원한: 언제, 무엇 때문에 (전쟁의 명분이 된다) */
   grievances?: Record<number, { t: number; why: string }>;
 }
@@ -187,6 +189,8 @@ export interface Character extends Pos {
   sleep?: number;
   /** 믿는 신앙 */
   faith?: number;
+  /** 악마: 마계의 예순여섯 (세력 없음) */
+  archdemon?: import('./demons').Archdemon;
   /** 열강: 나라를 떠나 홀로 선 강자 */
   paragon?: import('./paragon').Paragon;
   /** 고향에 전할 소식: 길에서 처음 만난 세력들 */

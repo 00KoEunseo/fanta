@@ -3,7 +3,7 @@ import { storySummary } from '../sim/lifeData7';
 import { STYLE_DESC, expandStyle } from '../sim/territory';
 import { RES_COLORS, RES_NAMES, TERRAIN } from '../data/terrain';
 import { APT_NAMES, STAT_NAMES, TRAIT_NAMES, describeTraits } from '../data/traits';
-import { fixJosa, fmtNum, pct } from '../data/text';
+import { fixJosa, fmtNum, josa, pct } from '../data/text';
 import type { Character, Faction, NewsItem, Settlement, World } from '../sim/state';
 import { LAYER_INFO, SEASON_NAMES, ageOf, dateStr, seasonOf } from '../sim/state';
 import { charLabel, isHero, leaderOf, settlementsOf, titleOf } from '../sim/helpers';
@@ -526,7 +526,7 @@ export function artifactsTab(w: World, sel: number): string {
   const a = w.artifacts[sel] ?? list[0];
   const h = w.chars[a.holder];
   const bar = (x: typeof a) => { const v = vigor(x); const n = Math.ceil(v * 5); return `<span title="${vigorWord(x)}" style="color:${v > 0.45 ? 'var(--gold)' : v > 0.2 ? '#c8a060' : '#a06050'}">${'●'.repeat(n)}${'○'.repeat(5 - n)}</span>`; };
-  const where = a.lost !== undefined ? `<span class="dim">${dateStr(w, a.lost)}에 스러졌다 — ${esc(a.fate ?? '')}</span>` : !a.tangible ? '온 세상에 퍼져 있다' : h ? `${charLink(w, h)}이(가) 지니고 있다` : a.site >= 0 ? `${esc(w.sites[a.site]?.name ?? '')}에 묻혀 있다` : '행방불명';
+  const where = a.lost !== undefined ? `<span class="dim">${dateStr(w, a.lost)}에 스러졌다 — ${esc(a.fate ?? '')}</span>` : !a.tangible ? '온 세상에 퍼져 있다' : h ? `${charLink(w, h)}${josa(h.name, '이').slice(h.name.length)} 지니고 있다` : a.site >= 0 ? `${esc(w.sites[a.site]?.name ?? '')}에 묻혀 있다` : '행방불명';
   return `<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px">
     <div><p class="dim" style="margin:0 0 4px">남아 있는 명품 ${live.length} · 스러진 명품 ${gone.length} — 명품에는 저마다 명맥이 있어, 세월이 다하면 부서지거나 잊힌다. 이름이 높을수록 사람들이 아껴 오래 남는다.</p>
     <table class="t"><tr><th>명품</th><th>종류</th><th>명성</th><th>명맥</th><th>소재</th></tr>${list.slice(0, 100).map(x => {

@@ -313,7 +313,7 @@ export function applyEff(x: Ctx, e: Eff, data: PlayerPrompt['data']): string {
   if (e.news) addNews(w, `${c.name}: ${text}`, e.news, 'player', { pos: c, chars: [c.id] });
   if (c.stats.health <= 0 && c.died < 0) {
     const nd = nearDeath(w, c, x.P, '무리한 끝에 입은 상처');
-    if (nd) text = `${text} ${nd}`;
+    if (nd) text = text ? `${text} ${nd}` : nd;
   }
   return text;
 }

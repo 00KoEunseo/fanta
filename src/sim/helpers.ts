@@ -1,4 +1,5 @@
 import { RACES } from '../data/races';
+import { demonTitle } from './demons';
 import { clergyTitle } from './religion';
 import type { Character, Faction, Pos, Settlement, World } from './state';
 import { ageOf } from './state';
@@ -83,6 +84,7 @@ export function titleOf(w: World, c: Character): string {
   if (f && f.leader === c.id) return RACES[f.race].titles[f.tier] ?? '군주';
   if (c.race === 'dragon') return c.ancient ? '고대 용' : '용';
   if (c.paragon) return '열강';
+  if (c.archdemon) return demonTitle(c);
   if (isHero(c)) return '용사';
   for (const sid of f ? f.settlements : []) {
     const s = w.settlements[sid];
@@ -169,6 +171,7 @@ export function charPower(c: Character, w?: World): number {
   if (c.awakened.includes('demonlord')) p += 30;
   // 열강은 이름 그대로 강하다
   if (c.paragon) p += 50;
+  if (c.archdemon) p += 60 - c.archdemon.rank * 0.5;
   if (w) p += artPower(w, c);
   return p;
 }
