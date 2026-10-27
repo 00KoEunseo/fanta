@@ -1,4 +1,5 @@
 import { caravanMaster, sendCaravan } from './caravan';
+import { faithWarFactor, faithWarReasons } from './religion';
 import { inheritKnown, knownYears, knows } from './contact';
 import { RACES, raceAffinity, type RaceKey } from '../data/races';
 import { markPeril } from './peril';
@@ -369,7 +370,7 @@ function warReason(w: World, a: Faction, b: Faction, ld: Character): string {
     return pick([`${when} ${g.why}의 원한을 갚을 때가 왔다.`, `${ld.name}은(는) ${when} ${g.why}을(를) 잊지 않았다.`, `${g.why}의 기억이 아직 생생하였다. 복수의 북이 울렸다.`]);
   }
   // 해당하는 명분을 모두 모은 뒤 그중 하나를 고른다 (한 가지 명분이 모든 전쟁을 차지하지 않도록)
-  const why: string[] = [];
+  const why: string[] = [...faithWarReasons(w, a, b)];
   if (a.flags.includes('food_crisis')) why.push(`굶주린 백성들이 ${b.name}의 곡창을 노렸다.`, '곳간이 비자 칼끝이 이웃의 들판을 향하였다.');
   if (Object.keys(b.wars).length >= 2) why.push(`사방에서 공격받는 ${b.name}을(를) 칠 절호의 기회라 여겼다.`, `${b.name}이(가) 여러 적과 싸우는 틈을 노렸다.`);
   if (t[PRIDE] > 70) why.push(`${ld.name}은(는) 모욕을 결코 잊지 않았다.`, `${b.name}의 사신이 무례하였다. ${ld.name}은(는) 그 자리에서 칼을 뽑았다.`, `${ld.name}은(는) 자존심에 난 상처를 피로 씻으려 하였다.`);
@@ -474,7 +475,7 @@ export function pWarMonth(w: World, a: Faction, b: Faction): number {
   const pile = special === 1 ? Math.pow(0.7, Object.keys(b.wars).length) : 1;
   const hunger = a.flags.includes('food_crisis') ? 1.6 : 1;
   const young = a.tier === 0 ? 0.4 : 1;
-  const p = (Math.max(5, -r - 30) / 70) * Math.max(0.05, aggr) * powerF * distF * warsF * pile * hunger * special * young * 0.008;
+  const p = (Math.max(5, -r - 30) / 70) * Math.max(0.05, aggr) * powerF * distF * warsF * pile * hunger * special * young * faithWarFactor(w, a, b) * 0.008;
   return Math.min(0.05, p);
 }
 

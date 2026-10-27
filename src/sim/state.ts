@@ -44,6 +44,8 @@ export interface Site extends Pos {
   loot: number;
   /** 성검 등 유물 보유 */
   relic: string | null;
+  /** 다시 세운 신전 (신전 터일 때) */
+  temple?: import('./religion').Temple;
 }
 
 export interface Settlement extends Pos {
@@ -67,6 +69,8 @@ export interface Settlement extends Pos {
   slaveRace?: RaceKey;
   /** 앓고 있는 병 (-1 없음) */
   disease?: number;
+  /** 고을 사람들이 믿는 신앙 */
+  faith?: number;
   /** 병마다 면역이 끝나는 시점 */
   immune?: Record<number, number>;
   hunger: number;
@@ -114,6 +118,8 @@ export interface Faction {
   history?: { t: number; text: string; imp: number }[];
   /** 지도자 교체 기록 */
   rulers: { id: number; from: number; to: number; how: string }[];
+  /** 나라의 국교 */
+  faith?: number;
   /** 알고 있는 세력과 알게 된 때 (없으면 예전 저장: 모두 안다) */
   known?: Record<number, number>;
   /** 존재를 아는 세계의 층 (없으면 예전 저장: 모두 안다) */
@@ -179,6 +185,8 @@ export interface Character extends Pos {
   /** 용 전용: 둥지 / 수면 */
   lair?: Pos;
   sleep?: number;
+  /** 믿는 신앙 */
+  faith?: number;
   /** 고향에 전할 소식: 길에서 처음 만난 세력들 */
   carry?: number[];
   /** 고향에 전할 소식: 다녀온 낯선 층 */
@@ -374,6 +382,8 @@ export interface World {
   towers: import('./towers').Tower[];
   /** 이름 있는 병들 */
   diseases: import('./disease').Disease[];
+  /** 세상의 신앙들 */
+  religions?: import('./religion').Religion[];
   /** 길 위의 상단 */
   caravans?: import('./caravan').Caravan[];
   /** 큰 이야기들의 기록부 (이야기 탭) */

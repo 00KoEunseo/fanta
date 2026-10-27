@@ -12,6 +12,7 @@ import { seaThingsAt } from '../sim/sea';
 import { eraName } from '../sim/news';
 import { currentStories, storyIcon, storyYears } from '../sim/stories';
 import { knows } from '../sim/contact';
+import { TENET_DESC, TENET_NAME, clergyTitle, faithOf } from '../sim/religion';
 import type { Caravan } from '../sim/caravan';
 import { capacity } from '../sim/settlements';
 import { ACHIEVEMENTS, TIER_COLORS, TIER_NAMES } from '../sim/achievements';
@@ -109,6 +110,7 @@ export function inspectChar(w: World, c: Character, secret: boolean): string {
   if (c.awakened.includes('sage')) tags.push('<span class="chip blue">현자</span>');
   if (c.awakened.includes('merchant')) tags.push('<span class="chip gold">거상</span>');
   if (c.awakened.includes('king')) tags.push('<span class="chip gold">왕의 그릇</span>');
+  { const fr = faithOf(w, c.faith); if (fr) tags.push(`<span class="chip" title="${esc(fr.tenets.map(t => TENET_NAME[t]).join('·'))}">${esc(fr.name)}${clergyTitle(w, c) ? ` ${clergyTitle(w, c)}` : ''}</span>`); }
   if (c.awakened.includes('seed') && (secret || w.demonLord === c.id)) tags.push('<span class="chip red">마왕의 씨앗</span>');
   if (c.awakened.includes('traitor')) tags.push('<span class="chip red">배신자</span>');
   if (c.isPlayer) tags.push('<span class="chip blue">당신</span>');
@@ -191,6 +193,7 @@ export function inspectSettlement(w: World, s: Settlement): string {
       <span>소속</span><span>${facLink(f)}</span>
       <span>영주</span><span>${charLink(w, gov && gov.died < 0 ? gov : undefined)}</span>
       <span>인구</span><span>${fmtNum(s.pop)} <small>/ 부양 한계 ${fmtNum(cap)}</small></span>
+      <span>신앙</span><span>${faithOf(w, s.faith) ? esc(faithOf(w, s.faith)!.name) : '<span class="dim">없음</span>'}</span>
       ${(s.slaves ?? 0) >= 1 ? `<span>노예</span><span>${fmtNum(s.slaves ?? 0)} <small>(${RACES[s.slaveRace ?? s.race].name})</small></span>` : ''}
       <span>건립</span><span>${dateStr(w, s.founded)}</span>
     </div>
@@ -224,6 +227,7 @@ export function inspectFaction(w: World, f: Faction): string {
       <span>군주</span><span>${charLink(w, ld ?? undefined)}</span>
       <span>왕조</span><span>${esc(f.dynasty)} 가문</span>
       <span>인구</span><span>${fmtNum(f.pop)}</span>
+      <span>국교</span><span>${faithOf(w, f.faith) ? `${esc(faithOf(w, f.faith)!.name)} <small>(${faithOf(w, f.faith)!.tenets.map(t => TENET_NAME[t]).join('·')})</small>` : '<span class="dim">없음</span>'}</span>
       <span>군사력</span><span>${fmtNum(f.military)}</span>
       <span>평균 발전</span><span>${Math.round(f.avgDev)}</span>
       ${f.treaties.length || w.stats[`caravanOk${f.id}`] ? `<span title="뭍길 교역은 반년마다 상단이 실제로 걸어서 짐을 나른다. 전쟁 중인 땅을 지나면 털릴 수 있다">상단 ⓘ</span><span>무사히 오간 ${w.stats[`caravanOk${f.id}`] ?? 0}번 · 지금 길 위 ${(w.caravans ?? []).filter(k => k.alive && k.fac === f.id).length}</span>` : ''}
@@ -436,7 +440,8 @@ export function legendHTML(): string {
     ['▣', '#e8c060', '상단 (교역 짐수레)'],
     ['Ω', '#f0dca0', '유적'],
     ['▼', '#f0dca0', '던전'],
-    ['†', '#f0dca0', '성소'],
+    ['†', '#8a8070', '무너진 신전 터'],
+    ['✝', '#ffd24a', '다시 세운 신전'],
     ['∩', '#c9a070', '동굴 입구'],
     ['⇡', '#e8f0ff', '구름 계단'],
     ['✧', '#ffe680', '천상의 계단'],
@@ -542,6 +547,27 @@ export function inspectCaravan(w: World, k: Caravan): string {
       <span>길 위에서</span><span>${months}개월째${k.alive ? ` · 남은 길 약 ${left}개월` : ''}</span>
     </div>
     <p class="dim">교역 협정을 맺은 나라 사이를 반년마다 오가는 짐 행렬이다. 싸우는 나라의 땅을 지나면 약탈당할 수 있고, 외진 길에서는 도적을 만나기도 한다.</p>`;
+}
+
+/** 신앙 탭: 세상의 신앙들 */
+export function faithTab(w: World): string {
+  const rs = (w.religions ?? []).slice().sort((a, b) => Number(b.alive) - Number(a.alive) || a.t - b.t);
+  if (!rs.length) return '<p class="dim">아직 세상에 신앙이 없다. 천사를 만나거나, 무너진 신전을 다시 세운 땅에서 가르침이 열린다.</p>';
+  return `<p class="dim" style="margin:0 0 6px">신앙은 고을에서 고을로 번지고, 백성 절반 이상이 믿으면 나라의 국교가 된다. 빛과 어둠의 종족은 서로의 신앙을 받아들이지 않는다.</p>
+    <div class="stories">${rs.map(r => {
+      const sets = w.settlements.filter(s => s.alive && s.faith === r.id);
+      const pop = sets.reduce((a, s) => a + s.pop, 0);
+      const states = w.factions.filter(f => f.alive && f.faith === r.id);
+      const holy = w.sites[r.holy];
+      const temples = w.sites.filter(s => s.temple?.faith === r.id);
+      return `<div class="story story-party"${holy ? ` data-jump="${holy.l},${holy.x},${holy.y}" title="눌러서 성지로"` : ''}${r.alive ? '' : ' style="opacity:.5"'}>
+        <b>✝ ${esc(r.name)}${r.alive ? '' : ' (잊힘)'}</b><small>${dateStr(w, r.t)} · ${esc(fixJosa(`${r.founderName}이(가) 열었다`))} · 섬기는 신: '${esc(r.deity)}'</small>
+        <div>교리: ${r.tenets.map(t => `<span title="${esc(TENET_DESC[t])}">${TENET_NAME[t]}</span>`).join(' · ')}</div>
+        <div>대신관: ${w.chars[r.head]?.died < 0 ? charLink(w, w.chars[r.head]) : '<span class="dim">비어 있음</span>'}</div>
+        <div>성지: ${holy ? esc(holy.name) : '<span class="dim">없음</span>'}${temples.length > 1 ? ` 외 신전 ${temples.length - 1}곳` : ''}</div>
+        <div>믿는 고을 ${sets.length}곳 · 신도 약 ${fmtNum(pop)} · 국교로 삼은 나라 ${states.map(f => facLink(f)).join(', ') || '없음'}</div>
+      </div>`;
+    }).join('')}</div>`;
 }
 
 export function houseLink(h: House): string {

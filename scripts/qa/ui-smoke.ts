@@ -39,6 +39,7 @@ check('통계', () => P.statsTab(w));
 check('나의 일대기', () => P.myLifeTab(w));
 check('나의 일대기(전부)', () => P.myLifeTab(w, true));
 check('이야기', () => P.storiesTab(w));
+check('신앙', () => P.faithTab(w));
 check('범례', () => P.legendHTML());
 check('명품', () => P.artifactsTab(w, 0));
 check('HUD', () => P.playerHudHTML(w, {}).html);

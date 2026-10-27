@@ -218,8 +218,9 @@ export class MapRenderer {
         if (site.l !== cam.l) continue;
         const [sx, sy] = this.toScreen(site.x + 0.5, site.y + 0.5);
         if (!this.visible(sx, sy)) continue;
-        ctx.fillStyle = site.loot > 0 || site.relic ? '#f0dca0' : '#7a705c';
-        glyph(ctx, SITE_GLYPH[site.kind] ?? '?', sx, sy);
+        // 다시 세운 신전은 금빛 십자, 무너진 신전 터는 잿빛
+        ctx.fillStyle = site.temple ? '#ffd24a' : site.kind === 'shrine' ? '#8a8070' : site.loot > 0 || site.relic ? '#f0dca0' : '#7a705c';
+        glyph(ctx, site.temple ? '✝' : SITE_GLYPH[site.kind] ?? '?', sx, sy);
       }
       for (const p of w.portals) {
         for (const e of [p.a, p.b]) {

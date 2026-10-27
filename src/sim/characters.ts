@@ -1,4 +1,5 @@
 import { RACES, type RaceKey } from '../data/races';
+import { onPilgrimArrive, pilgrimSite } from './religion';
 import { knows, knowsRealm, reachFactor } from './contact';
 import { lordLine, marketLine, prayLine, rulerLine, serveLine, socialLine, studyLine, trainLine } from './flavor';
 import { disasterStrikes } from './peril';
@@ -754,8 +755,10 @@ function doAction(w: World, c: Character, act: ActionKey): void {
       break;
     }
     case 'pilgrim': {
-      const shrines = w.sites.filter(s => s.kind === 'shrine' && approxDist(w, c, s) < 40);
-      if (shrines.length && setTravel(w, c, rng.pick(shrines), 'pilgrim')) charLog(w, c, '성지 순례를 떠났다.', 1);
+      // 믿는 신앙이 있고, 그 성지를 알 때만 순례를 떠난다 (신앙 없는 세상에는 순례도 없다)
+      const holy = pilgrimSite(w, c, f);
+      if (holy && setTravel(w, c, holy, 'pilgrim', holy.id)) charLog(w, c, `${holy.name}(으)로 순례를 떠났다.`, 2);
+      else charLog(w, c, prayLine(w, c));
       break;
     }
   }
@@ -847,7 +850,7 @@ function arrive(w: World, c: Character): void {
     }
     case 'pilgrim': {
       c.honor += 4; c.mood = clamp(c.mood + 10); c.traits[FAITH] = clamp(c.traits[FAITH] + 2);
-      charLog(w, c, '성지에서 기도를 올리고 마음의 평안을 얻었다.', 1);
+      onPilgrimArrive(w, c, w.sites[A.target ?? -1]);
       goHome(w, c);
       break;
     }

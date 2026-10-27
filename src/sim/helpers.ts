@@ -1,4 +1,5 @@
 import { RACES } from '../data/races';
+import { clergyTitle } from './religion';
 import type { Character, Faction, Pos, Settlement, World } from './state';
 import { ageOf } from './state';
 import { artPower } from './artifacts';
@@ -86,6 +87,9 @@ export function titleOf(w: World, c: Character): string {
     const s = w.settlements[sid];
     if (s && s.governor === c.id) return `${s.name} 영주`;
   }
+  // 신관·대신관: 군주와 영주 다음가는 자리
+  const cl = clergyTitle(w, c);
+  if (cl) return cl;
   if (c.awakened.includes('sage')) return '현자';
   if (c.awakened.includes('merchant')) return '거상';
   if (c.rank >= 1) return `명망 높은 ${c.role}`;

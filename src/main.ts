@@ -377,6 +377,7 @@ function updateBottom() {
     case 'stats': body.innerHTML = P.statsTab(w); break;
     case 'mylife': body.innerHTML = P.myLifeTab(w, S.lifeAll); break;
     case 'stories': body.innerHTML = P.storiesTab(w); break;
+    case 'faith': body.innerHTML = P.faithTab(w); break;
     case 'achv': body.innerHTML = P.achievementsTab(unlocked); break;
     case 'arts': body.innerHTML = P.artifactsTab(w, S.artSel); break;
   }

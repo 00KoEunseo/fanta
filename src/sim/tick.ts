@@ -1,4 +1,5 @@
 import { RACES } from '../data/races';
+import { religionMonth } from './religion';
 import { contactMonth } from './contact';
 import { raiseArmy } from './military';
 import { assignPioneers } from './pioneer';
@@ -57,6 +58,7 @@ export function tick(w: World): void {
   armiesMonth(w);
   caravanMonth(w);
   contactMonth(w);
+  religionMonth(w);
   crusadeMonth(w);
   housesMonth(w);
   seaMonth(w);
