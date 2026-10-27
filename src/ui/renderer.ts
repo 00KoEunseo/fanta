@@ -25,6 +25,7 @@ export class MapRenderer {
   showNames = true;
   /** 최근 큰 사건의 자리 (지도 위 표시) */
   showPins = true;
+  selectedCaravan = -1;
   pins: { l: number; x: number; y: number; imp: number; age: number }[] = [];
   selectedChar = -1;
   selectedSettlement = -1;
@@ -480,10 +481,21 @@ export class MapRenderer {
       if (!k.alive || k.l !== cam.l) continue;
       const t = Math.min(1, (now - this.tickTime) / this.animMs);
       const [sx, sy] = this.toScreen((k.pl === k.l ? k.px + (k.x - k.px) * t : k.x) + 0.5, (k.pl === k.l ? k.py + (k.y - k.py) * t : k.y) + 0.5);
+      // 짐수레: 세력 색 테두리를 두른 짐칸 위에 금빛 짐, 아래에 바퀴 둘
+      const u = Math.max(3, s * 0.32);
+      const col = w.factions[k.fac]?.color ?? '#c8a070';
+      const sel = this.selectedCaravan === k.id;
+      ctx.lineWidth = sel ? 2.5 : 1.5;
+      ctx.strokeStyle = sel ? '#ffffff' : 'rgba(0,0,0,0.85)';
+      ctx.fillStyle = '#8a5a2a';
+      ctx.fillRect(sx - u, sy - u * 0.4, u * 2, u * 0.9);
+      ctx.strokeRect(sx - u, sy - u * 0.4, u * 2, u * 0.9);
       ctx.fillStyle = '#e8c060';
-      ctx.font = `${Math.max(9, s * 0.8)}px sans-serif`;
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText('⛟', sx, sy);
+      ctx.fillRect(sx - u * 0.7, sy - u * 1.0, u * 1.4, u * 0.6);
+      ctx.strokeStyle = col; ctx.lineWidth = 1.2;
+      ctx.strokeRect(sx - u * 0.7, sy - u * 1.0, u * 1.4, u * 0.6);
+      ctx.fillStyle = '#2a1a0a';
+      for (const dx of [-0.6, 0.6]) { ctx.beginPath(); ctx.arc(sx + dx * u, sy + u * 0.6, u * 0.32, 0, Math.PI * 2); ctx.fill(); }
     }
     // 최근 큰 사건의 자리: 오래될수록 흐려지는 마름모, 가장 큰 일은 붉게 고동친다
     if (this.showPins) {

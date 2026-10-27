@@ -44,6 +44,7 @@ check('명품', () => P.artifactsTab(w, 0));
 check('HUD', () => P.playerHudHTML(w, {}).html);
 check('요약', () => summaryHTML(w, snap, ''));
 check('연대기 책', () => bookHTML(w));
+for (const k of (w.caravans ?? []).slice(0, 10)) check(`상단 ${k.id}`, () => P.inspectCaravan(w, k));
 for (const c of w.chars.filter((_, i) => i % 25 === 0)) check(`인물 ${c.id}`, () => P.inspectChar(w, c, true));
 for (const s of w.settlements.filter((_, i) => i % 5 === 0)) check(`고을 ${s.id}`, () => P.inspectSettlement(w, s));
 for (const f of w.factions) check(`세력 ${f.id}`, () => P.inspectFaction(w, f));

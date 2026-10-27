@@ -11,6 +11,7 @@ import { SEAL_NAMES, brokenCount, omen, sealTotal, sealVisible } from '../sim/do
 import { seaThingsAt } from '../sim/sea';
 import { eraName } from '../sim/news';
 import { currentStories, storyIcon, storyYears } from '../sim/stories';
+import type { Caravan } from '../sim/caravan';
 import { capacity } from '../sim/settlements';
 import { ACHIEVEMENTS, TIER_COLORS, TIER_NAMES } from '../sim/achievements';
 import { artLabel, vigor, vigorWord } from '../sim/artifacts';
@@ -427,6 +428,7 @@ export function legendHTML(): string {
     ['⇑', '#ffb060', '탑의 하늘 문'],
     ['⚔', '#ff5a4a', '군대'],
     ['⚑', '#9ad06a', '이주민'],
+    ['▣', '#e8c060', '상단 (교역 짐수레)'],
     ['Ω', '#f0dca0', '유적'],
     ['▼', '#f0dca0', '던전'],
     ['†', '#f0dca0', '성소'],
@@ -518,6 +520,22 @@ export function artifactsTab(w: World, sel: number): string {
     }).join('')}</table></div>
     <div><div class="ins-h">${esc(artLabel(a))}</div><div class="ins-sub">${dateStr(w, a.t)} 제작 · ${a.tangible ? `힘 +${a.power}` : '작품'} · 명성 ${Math.round(a.fame)} · 명맥 ${bar(a)} ${vigorWord(a)}</div>
     <div>${where}</div><div class="sec">내력</div><div class="log">${a.story.map(s2 => `<div><span class="when">${dateStr(w, s2.t)}</span>${esc(s2.text)}</div>`).join('')}</div></div></div>`;
+}
+
+/** 상단 정보창 */
+export function inspectCaravan(w: World, k: Caravan): string {
+  const f = w.factions[k.fac], from = w.settlements[k.from], to = w.settlements[k.to];
+  const months = w.t - k.t;
+  const left = Math.max(1, Math.ceil(k.path.length / 3));
+  return `<div class="ins-h"><span class="swatch" style="background:${f?.color ?? '#888'}"></span>${esc(f?.name ?? '')}의 상단</div>
+    <div class="ins-sub">교역 짐수레 · ${k.alive ? '길 위' : '여정을 마침'}</div>
+    <div class="kv">
+      <span>출발</span><span>${setLink(from)}</span>
+      <span>목적지</span><span>${setLink(to)} (${facLink(w.factions[k.partner])})</span>
+      <span>짐</span><span>${RES_NAMES[k.res]} ${Math.round(k.amt)}</span>
+      <span>길 위에서</span><span>${months}개월째${k.alive ? ` · 남은 길 약 ${left}개월` : ''}</span>
+    </div>
+    <p class="dim">교역 협정을 맺은 나라 사이를 반년마다 오가는 짐 행렬이다. 싸우는 나라의 땅을 지나면 약탈당할 수 있고, 외진 길에서는 도적을 만나기도 한다.</p>`;
 }
 
 export function houseLink(h: House): string {
