@@ -10,6 +10,7 @@ import { addNews, charLog } from './news';
 import { advance, posOf } from './path';
 import { clamp, isAdult } from './helpers';
 import { killChar, relocate, setPos } from './characters';
+import { shareTale } from './contact';
 
 export interface Caravan extends Pos {
   id: number;
@@ -131,6 +132,9 @@ export function caravanMonth(w: World): void {
       }
       // 무사히 닿은 상단은 소식이 되지 않는다 (털린 상단만 소식이 된다). 대신 한 해의 오고 감을 센다
       w.stats[`caravanOk${f.id}`] = (w.stats[`caravanOk${f.id}`] ?? 0) + 1;
+      // 상단은 소문도 싣고 다닌다
+      const df = w.factions[dest.faction];
+      if (df && df.alive && w.rngSim.chance(0.2)) shareTale(w, df, f, '상단');
     }
   }
   if (list.length > 150) w.caravans = list.filter(k => k.alive).map((k, i) => ({ ...k, id: i }));

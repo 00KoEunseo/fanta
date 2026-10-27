@@ -1,5 +1,5 @@
 import { RACES, type RaceKey } from '../data/races';
-import { knows, reachFactor } from './contact';
+import { knows, knowsRealm, reachFactor } from './contact';
 import { lordLine, marketLine, prayLine, rulerLine, serveLine, socialLine, studyLine, trainLine } from './flavor';
 import { disasterStrikes } from './peril';
 import { TERRAIN } from '../data/terrain';
@@ -665,7 +665,7 @@ function doAction(w: World, c: Character, act: ActionKey): void {
     }
     case 'adventure': {
       // 세상이 젊을 때는 가까운 유적만 기웃거린다 (멀리 정찰·탐험을 다니는 것은 세월이 흐른 뒤)
-      const sites = w.sites.filter(s => (s.loot > 0 || s.relic) && s.kind !== 'deep' && approxDist(w, c, s) < 30 * reachFactor(w));
+      const sites = w.sites.filter(s => (s.loot > 0 || s.relic) && s.kind !== 'deep' && knowsRealm(f, s.l) && approxDist(w, c, s) < 30 * reachFactor(w));
       if (sites.length) {
         const site = rng.pick(sites);
         if (setTravel(w, c, site, 'adventure', site.id)) { charLog(w, c, `${site.name}의 소문을 듣고 모험을 떠났다.`, 2); break; }

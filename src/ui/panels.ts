@@ -239,6 +239,7 @@ export function inspectFaction(w: World, f: Faction): string {
     ${f.flags.length ? `<div class="chips" style="margin-top:4px">${f.flags.filter(x => !x.includes(':') && x !== 'food_crisis').map(x => `<span class="chip">${esc(FLAG_NAMES[x] ?? x)}</span>`).join('')}${f.flags.includes('food_crisis') ? '<span class="chip red">식량 위기</span>' : ''}</div>` : ''}
     <div class="sec">영토 (${ss.length})</div>
     <div>${ss.map(s => `${setLink(s)} <small>${RACES[s.race].settlementTiers[s.tier]} · ${fmtNum(s.pop)}</small>`).join('<br>')}</div>
+    ${f.realms ? `<div class="dim" style="margin-top:4px">아는 세계: ${f.realms.slice().sort().map(l => LAYER_INFO[l].name).join(', ')}</div>` : ''}
     <div class="sec">대외 관계${unknown ? ` <small class="dim">· 아직 만나지 못한 세력 ${unknown}곳</small>` : ''}</div>
     <div>${rels.slice(0, 4).map(([o, v]) => `${facLink(o)} <small style="color:var(--red)">${Math.round(v)}</small>`).join('<br>')}</div>
     <div>${rels.slice(-3).reverse().filter(([, v]) => v > 0).map(([o, v]) => `${facLink(o)} <small style="color:var(--green)">+${Math.round(v)}</small>`).join('<br>')}</div>

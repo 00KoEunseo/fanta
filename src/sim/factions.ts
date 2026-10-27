@@ -39,7 +39,7 @@ export function createFaction(w: World, race: RaceKey, baseName: string, tier = 
   };
   f.name = factionName(f);
   // 새 세계(또는 조우를 쓰는 세계)의 세력은 아무도 모른 채로 태어난다
-  if (w.factions.length === 0 || w.factions.some(o => o.known)) f.known = {};
+  if (w.factions.length === 0 || w.factions.some(o => o.known)) { f.known = {}; f.realms = []; }
   w.factions.push(f);
   for (const o of w.factions) {
     if (o === f) continue;

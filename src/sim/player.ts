@@ -1,5 +1,5 @@
 import { RACES, type RaceKey } from '../data/races';
-import { knows } from './contact';
+import { knows, knowsRealm } from './contact';
 import { makeName } from '../data/names';
 import { ADVENTURER_TIRED, JOB_SEARCH, buildPrompt, makeCtx, nearDeath, resolveLife, type LifeEv } from './life';
 import { CHILD, RACIAL, ROMANCE, TRAIT } from './lifeData1';
@@ -206,7 +206,7 @@ LIFE.push({
   cond: (w, c) => isAdult(w, c) && c.act.kind === 'idle' && c.stats.health > 40,
   build: (w, c) => {
     // 실제로 갈 수 있는 곳만 소문으로 듣는다 (국경에 막힌 곳을 권하지 않는다)
-    const near = w.sites.filter(s => (s.loot > 0 || s.relic) && s.kind !== 'deep' && approxDist(w, c, s) < 50);
+    const near = w.sites.filter(s => (s.loot > 0 || s.relic) && s.kind !== 'deep' && knowsRealm(w.factions[c.faction], s.l) && approxDist(w, c, s) < 50);
     const sites = w.rngSim.shuffle(near.slice()).slice(0, 4).map(s => ({ s, chk: travelCheck(w, c, s, 'adventure') })).filter(o => o.chk);
     if (!sites.length) return null;
     const { s, chk } = w.rngSim.pick(sites);

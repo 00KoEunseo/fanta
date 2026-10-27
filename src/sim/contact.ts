@@ -4,7 +4,7 @@
 // 국경이 맞닿으면 저절로 알게 된다. 서로 모르는 세력끼리는 전쟁도, 교역도, 연맹도 맺지 않는다.
 import { RACES, raceAffinity } from '../data/races';
 import type { Character, Faction, Settlement, World } from './state';
-import { dist, yearOf } from './state';
+import { LAYER_INFO, dist, yearOf } from './state';
 import { addNews } from './news';
 import { addFacRel, isAdult } from './helpers';
 
@@ -18,10 +18,44 @@ export function knows(w: World, a: Faction | undefined, b: Faction | number | un
   return a.known[bid] !== undefined;
 }
 
-/** a가 b를 알게 된다 (처음이면 true) */
+/** a가 b를 알게 된다 (처음이면 true). b가 사는 층을 몰랐다면 그 층도 함께 안다 */
 export function learn(w: World, a: Faction, b: Faction): boolean {
   if (a === b || !a.known || a.known[b.id] !== undefined) return false;
   a.known[b.id] = w.t;
+  const cap = w.settlements[b.capital];
+  if (cap) learnRealm(w, a, cap.l, `${b.name}을(를) 통해`);
+  return true;
+}
+
+/** f가 세계의 그 층을 아는가 (예전 저장은 모두 안다) */
+export function knowsRealm(f: Faction | undefined, l: number): boolean {
+  if (!f || !f.realms) return true;
+  return f.realms.includes(l);
+}
+
+/** f가 그 층의 존재를 알게 된다 */
+export function learnRealm(w: World, f: Faction, l: number, how: string): boolean {
+  if (!f.realms || f.realms.includes(l)) return false;
+  f.realms.push(l);
+  addNews(w, `${f.name}이(가) ${how} ${LAYER_INFO[l].name}의 존재를 처음 알게 되었다.`, 3, 'politics', { facs: [f.id] });
+  return true;
+}
+
+/** 이야기를 나눈다: speaker가 아는 것 가운데 listener가 모르는 것 하나를 전해 준다 (세력 또는 층) */
+export function shareTale(w: World, listener: Faction, speaker: Faction, via: string): boolean {
+  if (!listener.known || !knows(w, listener, speaker)) return false;
+  const rng = w.rngSim;
+  const unknownFacs = Object.keys(speaker.known ?? {}).map(Number).map(id => w.factions[id])
+    .filter((o): o is Faction => !!o && o.alive && o !== listener && !knows(w, listener, o));
+  const unknownRealms = (speaker.realms ?? [0, 1, 2, 3, 4]).filter(l => !knowsRealm(listener, l));
+  if (unknownRealms.length && rng.chance(0.4)) {
+    const l = rng.pick(unknownRealms);
+    return learnRealm(w, listener, l, `${speaker.name}의 ${via}에게서 이야기를 듣고`);
+  }
+  if (!unknownFacs.length) return false;
+  const o = rng.pick(unknownFacs);
+  learn(w, listener, o);
+  addNews(w, `${listener.name}이(가) ${speaker.name}의 ${via}에게서 먼 땅의 ${o.name}에 대한 이야기를 전해 들었다.`, 2, 'politics', { facs: [listener.id, speaker.id, o.id] });
   return true;
 }
 
@@ -29,6 +63,7 @@ export function learn(w: World, a: Faction, b: Faction): boolean {
 export function inheritKnown(w: World, nf: Faction, parent: Faction | undefined): void {
   if (!parent || !nf.known) return;
   for (const [id, t] of Object.entries(parent.known ?? {})) nf.known[+id] ??= t;
+  if (nf.realms) for (const l of parent.realms ?? [0, 1, 2, 3, 4]) if (!nf.realms.includes(l)) nf.realms.push(l);
   learn(w, nf, parent); learn(w, parent, nf);
   for (const o of w.factions) if (o.alive && o !== nf && o !== parent && knows(w, o, parent)) learn(w, o, nf);
 }
@@ -72,6 +107,8 @@ function firstMeeting(w: World, c: Character, f: Faction, o: Faction, at: Settle
 /** 매달: 길 위의 만남, 돌아온 이의 이야기, 맞닿은 국경 */
 export function contactMonth(w: World): void {
   const alive = w.factions.filter(f => f.alive && f.known);
+  // 제 땅이 있는 층은 늘 안다
+  for (const f of alive) for (const sid of f.settlements) { const s = w.settlements[sid]; if (s && f.realms && !f.realms.includes(s.l)) f.realms.push(s.l); }
   if (alive.length < 2) return;
   for (const c of w.chars) {
     if (c.died >= 0 || c.race === 'dragon' || !isAdult(w, c)) continue;
@@ -88,6 +125,11 @@ export function contactMonth(w: World): void {
       c.carry = [];
       continue;
     }
+    if (c.carryRealm?.length && home && home.alive && c.l === home.l && dist(c, home) <= 3) {
+      for (const l of c.carryRealm) learnRealm(w, f, l, `${c.name}이(가) 다녀온 이야기로`);
+      c.carryRealm = [];
+      continue;
+    }
     // 낯선 이를 만나는 것은 뜻을 품고 길을 나선 이들뿐이다 (집으로 돌아가거나 피난하는 길은 셈하지 않는다)
     const A = c.act;
     const exploring = (A.kind === 'travel' && SEEK.has(A.purpose ?? '')) || A.kind === 'party';
@@ -95,6 +137,8 @@ export function contactMonth(w: World): void {
     // 세상이 젊을 때는 낯선 기척을 알아채는 일도 드물다
     const r = reachFactor(w);
     if (!w.rngSim.chance(0.25 * r * r * r)) continue;
+    // 낯선 층에 발을 디뎠다
+    if (home && c.l !== home.l && !knowsRealm(f, c.l) && !c.carryRealm?.includes(c.l)) (c.carryRealm ??= []).push(c.l);
     // 낯선 고을
     for (const s of w.settlements) {
       if (!s.alive || s.l !== c.l || s.faction === f.id || dist(s, c) > 4) continue;
@@ -113,6 +157,16 @@ export function contactMonth(w: World): void {
       if (!heard(w, f, o)) firstMeeting(w, c, f, o, null);
       (c.carry ??= []).push(o.id);
       if (!knows(w, o, f) && !d.carry?.includes(f.id)) (d.carry ??= []).push(f.id);
+    }
+  }
+  // 사이좋은 이웃이나 교역 상대와는 해마다 세상 이야기를 나눈다 (건너건너 알게 된다)
+  for (const f of alive) {
+    if (w.t % 12 !== (f.id + 6) % 12) continue;
+    for (const o of alive) {
+      if (o === f || !knows(w, f, o)) continue;
+      const trade = f.treaties.some(t => t.with === o.id);
+      if (!trade && (f.relations[o.id] ?? 0) < 25) continue;
+      if (w.rngSim.chance(trade ? 0.35 : 0.15)) shareTale(w, f, o, trade ? '상인들' : '사신');
     }
   }
   // 맞닿은 국경 (한 해에 한 번씩 살핀다)

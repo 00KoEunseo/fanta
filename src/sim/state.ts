@@ -116,6 +116,8 @@ export interface Faction {
   rulers: { id: number; from: number; to: number; how: string }[];
   /** 알고 있는 세력과 알게 된 때 (없으면 예전 저장: 모두 안다) */
   known?: Record<number, number>;
+  /** 존재를 아는 세계의 층 (없으면 예전 저장: 모두 안다) */
+  realms?: number[];
   /** 누군가 만나 보았지만 아직 소식이 닿지 않은 세력 */
   heard?: Record<number, number>;
   /** 다른 세력에게 품은 원한: 언제, 무엇 때문에 (전쟁의 명분이 된다) */
@@ -179,6 +181,8 @@ export interface Character extends Pos {
   sleep?: number;
   /** 고향에 전할 소식: 길에서 처음 만난 세력들 */
   carry?: number[];
+  /** 고향에 전할 소식: 다녀온 낯선 층 */
+  carryRealm?: number[];
   /** 보물 위의 긴 잠인가 (깰 때 포효한다) */
   deepSleep?: boolean;
   ancient?: boolean;

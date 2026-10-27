@@ -7,7 +7,8 @@ const out: Record<string, unknown>[] = [];
 for (const seed of (argv[2] ?? 'CT-1,CT-2,CT-3').split(',')) {
   const w = createWorld(seed);
   const y0 = yearOf(w);
-  let firstTrade = -1, firstWar = -1, firstContact = -1, contacts = 0, meet = 0, last = -1;
+  let firstTrade = -1, firstWar = -1, firstContact = -1, contacts = 0, meet = 0, last = -1, tales = 0, realms = 0;
+  const tsample: string[] = [];
   const sample: string[] = [];
   for (let i = 0; i < 12 * 100; i++) {
     tick(w);
@@ -18,11 +19,13 @@ for (const seed of (argv[2] ?? 'CT-1,CT-2,CT-3').split(',')) {
       if (/전쟁을 선포/.test(n.text) && firstWar < 0) firstWar = y;
       if (/처음으로 조우/.test(n.text)) { contacts++; if (firstContact < 0) firstContact = y; if (sample.length < 4) sample.push(`${y}년: ${n.text}`); }
       if (/낯선 .+들과 마주쳤다/.test(n.text)) { meet++; if (sample.length < 6) sample.push(`${y}년: ${n.text}`); }
+      if (/이야기를 전해 들었다/.test(n.text)) { tales++; if (tsample.length < 3) tsample.push(`${y}년: ${n.text}`); }
+      if (/존재를 처음 알게 되었다/.test(n.text)) { realms++; if (tsample.length < 6) tsample.push(`${y}년: ${n.text}`); }
     }
     last = w.nextNewsId - 1;
   }
   const alive = w.factions.filter(f => f.alive);
   const knownPairs = alive.reduce((a, f) => a + (f.known ? alive.filter(o => o !== f && f.known![o.id] !== undefined).length : alive.length - 1), 0);
-  out.push({ seed, firstContact, firstTrade, firstWar, contacts, meetings: meet, knownShare: +(knownPairs / Math.max(1, alive.length * (alive.length - 1))).toFixed(2), sample });
+  out.push({ seed, firstContact, firstTrade, firstWar, contacts, meetings: meet, knownShare: +(knownPairs / Math.max(1, alive.length * (alive.length - 1))).toFixed(2), tales, realms, sample, tsample });
 }
 console.log(JSON.stringify(out, null, 1));
