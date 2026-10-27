@@ -3,7 +3,7 @@ import { makeName, uniqueName } from '../data/names';
 import { addNews, charLog } from './news';
 import type { Character, Faction, Settlement, World } from './state';
 import { clamp, leaderOf } from './helpers';
-import { createCharacter } from './characters';
+import { createCharacter, setTravel } from './characters';
 
 export const ANGEL_LIFESPAN = 300;
 
@@ -130,3 +130,55 @@ export function guardianSeat(w: World): { seat: number; replaced: Character | nu
 }
 
 export { leaderOf };
+
+// ───────────── 세상을 지키는 천사의 일
+
+/** 천사의 임무: 역병을 거두고, 굶주린 고을을 축복하고, 마왕의 군세를 막아선다 */
+export interface AngelTask { kind: 'heal' | 'bless' | 'stand'; target: number; t: number }
+
+/** 매달 (천사 한 명, 할 일이 없을 때): 임무를 맡거나 해낸다. 무언가 했으면 true */
+export function angelDuty(w: World, c: Character): boolean {
+  const rng = w.rngSim;
+  const T = c.angelTask;
+  if (T) {
+    const s = w.settlements[T.target];
+    const army = T.kind === 'stand' ? w.armies[T.target] : undefined;
+    const pos = army ?? s;
+    if (!pos || (s && !s.alive) || (army && !army.alive) || w.t - T.t > 24) { c.angelTask = undefined; return false; }
+    if (c.l !== pos.l || Math.hypot(c.x - pos.x, c.y - pos.y) > 3) {
+      if (c.act.kind === 'idle') setTravel(w, c, pos, 'quest');
+      return true;
+    }
+    c.angelTask = undefined;
+    if (T.kind === 'heal' && s && s.plague > 0) {
+      s.plague = Math.max(0, Math.floor(s.plague * 0.3));
+      c.fame += 5;
+      charLog(w, c, `${s.name}의 역병을 거두었다.`, 2);
+      addNews(w, `${c.epithet ? c.epithet + ' ' : ''}${c.name}이(가) ${s.name}에 내려와 병자들에게 손을 얹었다. 역병이 물러가기 시작하였다.`, 2, 'hero', { pos: s, chars: [c.id] });
+    } else if (T.kind === 'bless' && s) {
+      s.stock[0] += s.pop * 0.2; s.stability = clamp(s.stability + 10);
+      charLog(w, c, `굶주린 ${s.name}을(를) 축복하였다.`, 2);
+      addNews(w, `굶주린 ${s.name}의 곳간에 하늘의 빛이 내렸다. ${c.name}의 축복이었다.`, 2, 'hero', { pos: s, chars: [c.id] });
+    } else if (T.kind === 'stand' && army) {
+      const cut = Math.min(army.soldiers, Math.round(c.stats.might * rng.float(1.5, 3)));
+      army.soldiers -= cut;
+      if (army.soldiers < 10) army.alive = false;
+      charLog(w, c, `마왕의 군세 앞을 막아섰다.`, 3);
+      addNews(w, `${c.epithet ? c.epithet + ' ' : ''}${c.name}이(가) 마왕의 군세 앞에 내려섰다. 빛의 칼날에 ${cut}명이 쓰러졌다.`, 3, 'hero', { pos: army, chars: [c.id] });
+    }
+    return true;
+  }
+  if (!rng.chance(0.015)) return false;
+  // 할 일을 고른다: 마왕의 군세 > 역병 > 기근 (천사는 온 세상을 내려다본다)
+  const dl = w.demonLord >= 0 ? w.chars[w.demonLord] : null;
+  const horde = dl ? w.armies.find(a => a.alive && a.faction === dl.faction && (a.goal === 'conquer' || a.goal === 'raid')) : undefined;
+  if (horde && rng.chance(0.5)) { c.angelTask = { kind: 'stand', target: horde.id, t: w.t }; return true; }
+  const sick = w.settlements.filter(s => s.alive && s.plague > 0 && RACES_LIGHT(s.race)).sort((a, b) => b.pop - a.pop)[0];
+  if (sick && rng.chance(0.5)) { c.angelTask = { kind: 'heal', target: sick.id, t: w.t }; return true; }
+  const hungry = w.settlements.filter(s => s.alive && s.hunger > 3 && RACES_LIGHT(s.race)).sort((a, b) => b.hunger - a.hunger)[0];
+  if (hungry) { c.angelTask = { kind: 'bless', target: hungry.id, t: w.t }; return true; }
+  return false;
+}
+
+/** 천사가 돌보는 이들: 어둠의 종족이 아닌 고을 */
+const RACES_LIGHT = (r: string) => r !== 'majin' && r !== 'demon' && r !== 'undead';

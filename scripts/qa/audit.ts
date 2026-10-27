@@ -68,6 +68,14 @@ for (const r of W) {
   chk(`[${r.seed}] 큰 사건 보존`, !r.hiKept || r.hiKept.stored >= r.hiKept.produced, r.hiKept ? `큰 사건 ${r.hiKept.produced}건 중 ${r.hiKept.stored}건 보관 (전체 소식 ${r.news.total}건 중 ${r.news.stored}건)` : '');
   chk(`[${r.seed}] 명품 쏠림`, r.world.maxArtifactsHeld <= 5, `한 사람 최대 ${r.world.maxArtifactsHeld}개`, true);
   chk(`[${r.seed}] 세력 생존`, r.world.factionsAlive >= 4, `생존 ${r.world.factionsAlive} / 누적 ${r.world.factionsEver}`);
+  if (r.wars) {
+    chk(`[${r.seed}] 이웃끼리 전쟁`, r.wars.neighbor >= 0.6, `${Math.round(r.wars.neighbor * 100)}% (목표 65% 이상)`, true);
+    chk(`[${r.seed}] 긴 전쟁`, r.wars.over10 >= 0.05, `10년 이상 ${Math.round(r.wars.over10 * 100)}%, 30년 이상 ${r.wars.over30}번, 중앙값 ${r.wars.median}년`, true);
+  }
+  if (r.people) {
+    chk(`[${r.seed}] 마계 인물 쏠림`, r.people.demonNamedShare <= Math.max(0.05, r.people.demonPopShare * 2), `마계 인물 ${Math.round(r.people.demonNamedShare * 100)}% / 마계 인구 ${(r.people.demonPopShare * 100).toFixed(1)}%`);
+    chk(`[${r.seed}] 인물 없는 큰 종족`, !r.people.starved.length, r.people.starved.join(', ') || '없음', true);
+  }
   chk(`[${r.seed}] 직업 쏠림`, !r.world.topRole || r.world.topRole[1] < 0.2, `최다 직업 ${r.world.topRole?.join(' ')}`, true);
 }
 // ── 화면
@@ -116,6 +124,12 @@ const metrics: Record<string, number> = {
   '첫 교역(년)': avg(W.map(r => r.early?.firstTrade ?? -1)),
   '첫 전쟁(년)': avg(W.map(r => r.early?.firstWar ?? -1)),
   '길 위의 상단(평균)': avg(W.map(r => r.early?.caravansAvg ?? 0)),
+  '전쟁 기간 중앙값(년)': avg(W.map(r => r.wars?.median ?? 0)),
+  '10년 이상 전쟁 비율': avg(W.map(r => r.wars?.over10 ?? 0)),
+  '이웃끼리 전쟁 비율': avg(W.map(r => r.wars?.neighbor ?? 0)),
+  '같은 성향끼리 전쟁 비율': avg(W.map(r => r.wars?.same ?? 0)),
+  '교역로 평균 길이': avg(W.map(r => r.people?.tradeAvg ?? 0)),
+  '마계 인물 비율': avg(W.map(r => r.people?.demonNamedShare ?? 0)),
   '생애 선택지/년': avg(Lf.map(r => r.perYear)),
   '생애 여행·유적 비율': avg(Lf.map(r => r.travelShare)),
   '생애 같은 문장 최다반복': avg(Lf.map(r => r.maxSameText[0])),

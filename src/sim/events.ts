@@ -269,7 +269,7 @@ ev({
 });
 ev({
   id: 'assassination', scope: 'faction',
-  p: (w, f: Faction) => (Object.keys(f.wars).length ? 0.0012 : 0.0002),
+  p: (w, f: Faction) => (f.race === 'angel' ? 0 : Object.keys(f.wars).length ? 0.0012 : 0.0002),
   fire: (w, f: Faction) => {
     const ld = leaderOf(w, f);
     if (!ld) return;

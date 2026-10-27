@@ -280,7 +280,8 @@ function arrive(w: World, a: Army): void {
     a.soldiers -= lossA; s.pop -= lossD;
     w.corpses += lossA + lossD;
     const govHere = !!gov && gov.died < 0 && gov.l === s.l && dist(gov, s) <= 4;
-    if (govHere) { gov!.fame += 8; charLog(w, gov!, `${f.name}의 공격으로부터 ${s.name}을(를) 지켜냈다.`, 2); }
+    // 같은 적을 한 해에 여러 번 막아내면 일대기에는 한 번만 남긴다
+    if (govHere) { gov!.fame += 8; const again = gov!.bio.some(b => b.t > w.t - 12 && b.text.includes(`${f.name}의 공격으로부터`)); charLog(w, gov!, `${f.name}의 공격으로부터 ${s.name}을(를) 지켜냈다.`, again ? 1 : 2); }
     warScore(w, def, f, a.goal === 'raid' ? 2 : 5);
     addNews(w, `${s.name}이(가) ${f.name}의 ${a.goal === 'raid' ? '약탈대' : '공격'}을(를) 막아냈다.`, a.goal === 'raid' ? 1 : 2, 'war', { pos: s, facs: [f.id, s.faction] });
     if (cmd && cmd.died < 0) {

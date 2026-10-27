@@ -16,6 +16,9 @@
 | `npx tsx scripts/qa/religion-check.ts <시드들> <년>` | 신앙의 탄생·전파·국교·대신관·성전 명분 | 약 3분 |
 | `npx tsx scripts/qa/camp-check.ts <시드들> <년>` | 주둔지 세움·출격·철수·함락 | 약 3분 |
 | `npx tsx scripts/qa/paragon-check.ts <시드들> <년>` | 열강의 등장·종족·목적별 행적·도전자 | 약 3분 |
+| `npx tsx scripts/qa/diag.ts <시드> <년>` | 층·종족별 인물과 인구, 전쟁 기간·거리·같은 성향, 교역 거리, 천사 일대기 | 약 2분 |
+| `npx tsx scripts/qa/demon-check.ts <시드들> <년>` | 악마 예순여섯의 행적, 마족의 수와 노는 비율 | 약 3분 |
+| `npx tsx scripts/qa/doom-rate.ts <세계 수> <년>` | 세계 여럿을 돌려 멸망 빈도, 봉인 넷 이상인 달, 전쟁·인물 분포를 잰다 | 24개면 약 15분 |
 | `npx tsx scripts/qa/compat.ts <저장 파일>` | 예전 코드로 만든 저장 파일을 지금 코드로 불러와 30년 진행·화면·재저장을 확인한다 | 약 1분 |
 | `npx tsx scripts/qa/ui-smoke.ts <시드> <년>` | 모든 탭·정보창의 HTML을 만들어 오류·빈 값·조사 표기를 찾는다 (audit에 포함) | 약 1분 |
 

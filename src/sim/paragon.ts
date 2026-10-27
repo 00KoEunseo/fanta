@@ -69,7 +69,8 @@ export function paragonYear(w: World): void {
   }
 }
 
-/** 열강이 된다: 나라를 떠나 홀로 서고, 거처를 세운다 */
+/** 열강이 된다: 나라를 떠나 홀로 서고, 거처를 세운다 ('나'도 될 수 있다) */
+export function ascendParagon(w: World, c: Character): void { ascend(w, c); }
 function ascend(w: World, c: Character): void {
   const rng = w.rngSim;
   const motive = motiveOf(c);

@@ -6,7 +6,7 @@ import { yearOf } from './state';
 import { fixJosa } from '../data/text';
 
 export type StoryKind = 'war' | 'dl' | 'dragon' | 'plague' | 'party' | 'abyss';
-export interface StoryView { id: string; kind: StoryKind; title: string; since: number; lines: string[]; pos?: Pos; weight: number }
+export interface StoryView { id: string; kind: StoryKind; title: string; since: number; lines: string[]; pos?: Pos; weight: number; /** 이야기의 주인공 (누르면 추적) */ char?: number }
 export interface StoryEnd { id: string; kind: StoryKind; title: string; t0: number; t1: number; end: string }
 export interface StoryBook { open: Record<string, { t: number; title: string; kind: StoryKind }>; ended: StoryEnd[] }
 
@@ -32,7 +32,7 @@ export function currentStories(w: World): StoryView[] {
     const id = `dl:${dl.id}`, t0 = since(id);
     const vassals = w.factions.filter(f => f.alive && f.flags.includes('dlvassal')).length;
     const parties = w.parties.filter(p => !p.done && p.target === dl.id).length;
-    out.push({ id, kind: 'dl', title: `마왕 ${dl.name}의 치세`, since: t0, weight: 100, pos: dl,
+    out.push({ id, kind: 'dl', title: `마왕 ${dl.name}의 치세`, since: t0, weight: 100, pos: dl, char: dl.id,
       lines: [`${yrs(w, t0)}년째 어둠이 이어지고 있다.`, vassals ? `무릎 꿇은 나라 ${vassals}곳.` : '아직 그를 따르는 나라는 없다.', parties ? `그를 노리는 토벌대 ${parties}개가 길 위에 있다.` : '그에게 맞서는 토벌대는 아직 없다.'] });
   }
   // 깨어난 고대 용
@@ -41,7 +41,7 @@ export function currentStories(w: World): StoryView[] {
     const id = `dragon:${d.id}`, t0 = since(id);
     const burned = countNews(t0, (text, chars) => chars.includes(d.id) && /불태웠다/.test(text));
     const hunters = w.parties.filter(p => !p.done && p.target === d.id).length;
-    out.push({ id, kind: 'dragon', title: `고대 용 ${d.name}`, since: t0, weight: 80, pos: d,
+    out.push({ id, kind: 'dragon', title: `고대 용 ${d.name}`, since: t0, weight: 80, pos: d, char: d.id,
       lines: [`깨어난 지 ${yrs(w, t0)}년, 불태운 고을 ${burned}곳.`, (d.sleep ?? 0) > 0 ? '지금은 둥지에서 쉬고 있다.' : '하늘을 맴돌며 다음 먹잇감을 찾고 있다.', hunters ? `토벌대 ${hunters}개가 뒤를 쫓는다.` : '아직 맞서는 이가 없다.'] });
   }
   // 심연의 군주
@@ -66,14 +66,14 @@ export function currentStories(w: World): StoryView[] {
     const lead = w.chars[p.leader], foe = w.chars[p.target];
     if (!lead || lead.died >= 0 || !foe) continue;
     const id = `party:${p.id}`, t0 = since(id);
-    out.push({ id, kind: 'party', title: p.name || `${lead.name}의 토벌대`, since: t0, weight: 40 + p.members.length, pos: lead,
+    out.push({ id, kind: 'party', title: p.name || `${lead.name}의 토벌대`, since: t0, weight: 40 + p.members.length, pos: lead, char: lead.id,
       lines: [`${lead.name}이(가) 이끄는 ${p.members.length}명이 ${foe.name}을(를) 쫓는다.`, `길을 나선 지 ${yrs(w, t0) || '한 해도 되지 않았다'}${yrs(w, t0) ? '년' : ''}.`] });
   }
   // 열강
   for (const c of w.chars) {
     if (c.died >= 0 || !c.paragon) continue;
     const id = `paragon:${c.id}`, t0 = since(id);
-    out.push({ id, kind: 'party', title: `열강 ${c.epithet ? c.epithet + ' ' : ''}${c.name}`, since: t0, weight: 35, pos: c,
+    out.push({ id, kind: 'party', title: `열강 ${c.epithet ? c.epithet + ' ' : ''}${c.name}`, since: t0, weight: 35, pos: c, char: c.id,
       lines: [`${c.paragon.seat.name}에 거처를 두었다.`, `${paragonDoing(w, c)}.`] });
   }
   // 전쟁 (오래되고 큰 것부터)

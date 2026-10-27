@@ -1,5 +1,6 @@
 import { RACES, type RaceKey } from '../data/races';
 import { demonMonth } from './demons';
+import { angelDuty } from './angels';
 import { paragonMonth } from './paragon';
 import { onPilgrimArrive, pilgrimSite } from './religion';
 import { knows, knowsRealm, reachFactor } from './contact';
@@ -505,6 +506,8 @@ function actionScores(w: World, c: Character): Record<ActionKey, number> {
     pilgrim: t[FAITH] > 0.7 ? 0.08 : 0,
   };
   if (c.stats.health < 35) { s.adventure *= 0.1; s.train *= 0.3; s.hunt *= 0.2; }
+  // 천사는 돈을 벌거나 장사하거나 구애하거나 음모를 꾸미지 않는다: 기도하고, 수련하고, 섬긴다
+  if (c.race === 'angel') { s.work = 0.1; s.trade = 0; s.court = 0; s.scheme = 0; s.crime = 0; s.pact = 0; s.adventure = 0; s.pilgrim = 0; s.pray += 1; s.serve += 0.6; s.train += 0.4; }
   if (c.isPlayer) { s.scheme = 0; s.court = 0; s.pact = 0; applyPlayerPath(w, c, s); }
   return s;
 }
@@ -563,8 +566,10 @@ export function characterMonth(w: World, c: Character): void {
   // 나이가 들수록 상처가 더디게 아문다
   const old = ageOf(w, c) > c.lifespan * 0.6;
   c.stats.health = clamp(c.stats.health + (old ? 0.8 : 1.5));
-  // 험한 일을 하는 이는 일하다 다친다
-  const risk = RISK_JOBS[c.role];
+  // 천사는 세상을 지키는 일을 한다 (세속의 일상은 살지 않는다)
+  if (c.race === 'angel' && angelDuty(w, c)) return;
+  // 험한 일을 하는 이는 일하다 다친다 (천사는 세속의 부상을 입지 않는다)
+  const risk = c.race === 'angel' ? 0 : RISK_JOBS[c.role];
   if (risk && isAdult(w, c) && rng.chance(risk)) {
     const dmg = rng.int(8, 28) * clamp(1.2 - c.stats.might / 200, 0.6, 1.2);
     c.stats.health = clamp(c.stats.health - dmg);
@@ -616,7 +621,8 @@ export function characterMonth(w: World, c: Character): void {
     return;
   }
   const scores = actionScores(w, c);
-  const keys = Object.keys(scores) as ActionKey[];
+  // 천사에게 하지 않는 일(점수 0)은 아예 고르지 않는다
+  const keys = (Object.keys(scores) as ActionKey[]).filter(k => c.race !== 'angel' || scores[k] > 0);
   const act = rng.weighted(keys, k => Math.pow(scores[k] + rng.float(0, 0.15), 2)) ?? 'work';
   doAction(w, c, act);
 }
@@ -1155,15 +1161,22 @@ export function pDeathMonth(w: World, c: Character): number {
   return Math.min(0.5, p);
 }
 
-/** 세력마다 이름 있는 인물의 몫: 인구에 비례한다 (세상 전체 약 700명). 수명이 긴 종족이 자리를 독차지하지 않도록 */
+/** 이름 있는 인물의 몫: 세력 안의 종족별 인구에 비례한다 (세상 약 700명).
+ *  수명이 긴 종족이 자리를 독차지하지 않고, 정복당한 고을의 다른 종족도 제 몫의 인물을 낸다 */
 const NAMED_BUDGET = 700;
-function namedQuota(w: World): { quota: Map<number, number>; members: Map<number, number> } {
-  const members = new Map<number, number>();
-  for (const c of w.chars) if (c.died < 0 && c.faction >= 0) members.set(c.faction, (members.get(c.faction) ?? 0) + 1);
+function namedQuota(w: World): { quota: Map<string, number>; members: Map<string, number> } {
+  const members = new Map<string, number>();
+  for (const c of w.chars) if (c.died < 0 && c.faction >= 0) { const k = `${c.faction}:${c.race}`; members.set(k, (members.get(k) ?? 0) + 1); }
+  const pop = new Map<string, number>();
   let total = 0;
-  for (const f of w.factions) if (f.alive && !RACES[f.race].noPop) total += f.pop;
-  const quota = new Map<number, number>();
-  for (const f of w.factions) if (f.alive) quota.set(f.id, Math.max(3, Math.min(60, Math.round(NAMED_BUDGET * f.pop / Math.max(1, total)))));
+  for (const s of w.settlements) {
+    if (!s.alive || RACES[s.race].noPop) continue;
+    const k = `${s.faction}:${s.race}`;
+    pop.set(k, (pop.get(k) ?? 0) + s.pop);
+    total += s.pop;
+  }
+  const quota = new Map<string, number>();
+  for (const [k, p] of pop) quota.set(k, Math.max(2, Math.min(50, Math.round(NAMED_BUDGET * p / Math.max(1, total)))));
   return { quota, members };
 }
 
@@ -1173,7 +1186,7 @@ export function lifecycleMonth(w: World): void {
   const crowd = alive.length;
   const { quota, members } = namedQuota(w);
   // 몫에 견주어 얼마나 찼는가 (1: 꼭 맞음)
-  const fill = (fid: number) => (members.get(fid) ?? 0) / (quota.get(fid) ?? 3);
+  const fill = (fid: number, race: string) => (members.get(`${fid}:${race}`) ?? 0) / (quota.get(`${fid}:${race}`) ?? 2);
   for (const c of alive) {
     // 악마는 늙거나 앓아 죽지 않는다 (쓰러뜨려야 죽는다)
     if (!c.ancient && !c.archdemon && rng.chance(pDeathMonth(w, c))) {
@@ -1189,7 +1202,7 @@ export function lifecycleMonth(w: World): void {
       const R = RACES[c.race];
       // 탄생 모드의 집안은 세상 전체의 인구 조절에 묶이지 않는다 (왕가에는 후사가 필요하다)
       const mine = c.isPlayer || !!sp?.isPlayer;
-      const r = fill(c.faction);
+      const r = fill(c.faction, c.race);
       const room = r < 0.7 ? 1.5 : r < 1 ? 1 : r < 1.3 ? 0.3 : 0.05;
       const fert = Math.min(0.03, R.growth * 4.5) * (c.children.length >= (mine ? 8 : 5) ? 0.15 : 1) * (mine ? 1 : room * (crowd > 1100 ? 0.05 : 1));
       // 한집에 살거나 곁에 있으면 아이가 들어선다
@@ -1212,7 +1225,7 @@ export function lifecycleMonth(w: World): void {
     const f = w.factions[s.faction];
     if (!f) continue;
     // 몫이 비어 있을수록 두각을 나타내는 이가 잦다. 몫이 찼으면 나오지 않는다
-    const r = fill(f.id);
+    const r = fill(f.id, s.race);
     let p = s.pop / 45000;
     if (r < 0.5) p *= 6; else if (r < 1) p *= 3; else p = 0;
     if (crowd > 1100) p = 0;

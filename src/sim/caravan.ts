@@ -11,6 +11,7 @@ import { advance, posOf } from './path';
 import { clamp, isAdult } from './helpers';
 import { killChar, relocate, setPos } from './characters';
 import { shareTale } from './contact';
+import { tradePath as tradePathOf, tradeRoute } from './factions';
 
 export interface Caravan extends Pos {
   id: number;
@@ -138,4 +139,23 @@ export function caravanMonth(w: World): void {
     }
   }
   if (list.length > 150) w.caravans = list.filter(k => k.alive).map((k, i) => ({ ...k, id: i }));
+}
+
+/** '나'가 상단을 이끌고 떠난다 */
+export function playerCaravan(w: World, c: Character, f: Faction, o: Faction): string {
+  const a = w.settlements[f.capital], b = w.settlements[o.capital];
+  if (!a || !b) return '상단이 떠날 길이 없었다.';
+  const t = f.treaties.find(x => x.with === o.id);
+  if (!t) return '교역 협정이 끝나 있었다.';
+  const route = tradeRoute(w, f, o);
+  if (route.sea) return '뱃길이라 수레를 이끌 일은 없었다. 짐을 배에 실어 보냈다.';
+  const path = tradePathOf(w, f, o);
+  if (!path) return '걸어갈 길이 없었다.';
+  const amt = Math.min(a.stock[t.give] * 0.4, 6 + a.pop / 15);
+  a.stock[t.give] -= amt;
+  w.caravans ??= [];
+  const id = w.caravans.length;
+  w.caravans.push({ id, fac: f.id, partner: o.id, from: a.id, to: b.id, res: t.give, amt, path, l: a.l, x: a.x, y: a.y, pl: a.l, px: a.x, py: a.y, alive: true, t: w.t, crew: [c.id] });
+  c.act = { kind: 'caravan', target: id };
+  return `${RES_NAMES[t.give]} 수레를 이끌고 ${b.name}(으)로 길을 나섰다.`;
 }

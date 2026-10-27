@@ -11,7 +11,9 @@ function deadSlim(c: World['chars'][number]): World['chars'][number] {
   const rel = Object.entries(c.relations).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 6);
   const stats = { ...c.stats };
   for (const k of Object.keys(stats) as (keyof typeof stats)[]) stats[k] = Math.round(stats[k]);
-  return { ...c, log: [], relations: Object.fromEntries(rel), stats, wealth: Math.round(c.wealth), fame: Math.round(c.fame) };
+  // 일대기는 굵직한 줄만, 이름난 이는 마흔 줄, 덜 알려진 이는 열두 줄까지 (세월이 흐를수록 고인이 쌓인다)
+  const bio = c.bio.filter(b => (b.imp ?? 2) >= 3).slice(c.fame >= 30 || c.rank >= 2 ? -40 : -12);
+  return { ...c, log: [], bio, relations: Object.fromEntries(rel), stats, wealth: Math.round(c.wealth), fame: Math.round(c.fame) };
 }
 
 export function serialize(w: World): string {

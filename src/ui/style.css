@@ -264,7 +264,8 @@ table.t tr:hover td { background: #201b13; cursor: pointer; }
 .story { padding: 6px 9px; border: 1px solid var(--line); border-left: 3px solid var(--dim); border-radius: 4px; background: var(--panel2); font-size: 12px; line-height: 1.55; }
 .story b { display: block; color: var(--text); }
 .story small { display: block; color: var(--dim); margin-bottom: 2px; }
-.story[data-jump] { cursor: pointer; }
+.story[data-jump], .story[data-trackchar] { cursor: pointer; }
+.story[data-trackchar]:hover { border-color: var(--gold); }
 .story[data-jump]:hover { border-color: var(--gold); }
 .story-war { border-left-color: var(--red); }
 .story-dl { border-left-color: var(--violet); }

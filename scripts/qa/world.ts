@@ -6,6 +6,8 @@ import { serialize, deserialize } from '../../src/sim/save';
 import { yearOf } from '../../src/sim/state';
 import type { NewsItem } from '../../src/sim/state';
 import { templater, countIssues, textIssues } from './common';
+import { facDist, isNeighbor, tradeRoute } from '../../src/sim/factions';
+import { RACES } from '../../src/data/races';
 const argv: string[] = (globalThis as any).process.argv;
 const seed = argv[2] ?? 'QA-1', years = +(argv[3] ?? 300);
 
@@ -15,7 +17,8 @@ const deterministic = fp(seed) === fp(seed);
 
 const w = createWorld(seed);
 const all: NewsItem[] = [];
-let lastId = -1, worst = 0, doomAt = -1, carSum = 0, carN = 0;
+let lastId = -1, worst = 0, doomAt = -1, carSum = 0, carN = 0, sealMonths4 = 0, sealMax = 0;
+const warStart = new Map<string, { t: number; neighbor: boolean; same: boolean }>(); const warDur: number[] = []; let warN = 0, warNb = 0, warSame = 0;
 const firsts: Record<string, number> = {};
 const t0 = performance.now();
 for (let i = 0; i < years * 12; i++) {
@@ -26,7 +29,15 @@ for (let i = 0; i < years * 12; i++) {
     const n = w.news[k]; all.push(n);
     for (const [key, re] of [['contact', /처음으로 조우/], ['trade', /교역 협정을 맺었다/], ['war', /전쟁을 선포/]] as [string, RegExp][]) if (re.test(n.text)) firsts[key] = Math.min(firsts[key] ?? 1e9, Math.floor(n.t / 12));
   }
+  { const nb = w.doom.seals.filter(Boolean).length; if (nb >= 4) sealMonths4++; sealMax = Math.max(sealMax, nb); }
   if (i % 12 === 11) { carSum += (w.caravans ?? []).filter(k => k.alive).length; carN++; }
+  // 전쟁의 시작과 끝 (기간, 이웃 여부, 같은 성향 여부)
+  for (const a of w.factions) for (const id of Object.keys(a.wars)) {
+    const b = w.factions[+id]; if (!b || b.id < a.id) continue;
+    const k = `${a.id}-${b.id}`;
+    if (!warStart.has(k)) { const nb = isNeighbor(w, a, b) || facDist(w, a, b) <= 20; const same = RACES[a.race].align === RACES[b.race].align; warStart.set(k, { t: w.t, neighbor: nb, same }); warN++; if (nb) warNb++; if (same) warSame++; }
+  }
+  for (const [k, v] of warStart) { const [x, y] = k.split('-').map(Number); if (w.factions[x]?.wars[y] === undefined) { warDur.push((w.t - v.t) / 12); warStart.delete(k); } }
   lastId = w.nextNewsId - 1;
   if (w.doom.ended) { doomAt = yearOf(w); break; }
 }
@@ -64,6 +75,8 @@ const deaths = w.chars.filter(c => c.died >= 0);
 const roles: Record<string, number> = {};
 const living = w.chars.filter(c => c.died < 0);
 for (const c of living) roles[c.role] = (roles[c.role] ?? 0) + 1;
+// 악마와 열강은 사회 바깥의 존재라 직업 통계에서 뺀다
+for (const c of living) if (c.archdemon || c.paragon) roles[c.role]--;
 const roleShares = Object.entries(roles).filter(([r]) => r !== '평민').map(([r, v]) => [r, v / living.length] as const).sort((a, b) => b[1] - a[1]);
 const held = new Map<number, number>();
 for (const a of w.artifacts) if (a.holder >= 0 && a.tangible) held.set(a.holder, (held.get(a.holder) ?? 0) + 1);
@@ -84,6 +97,19 @@ console.log(JSON.stringify({
     imp4PerYear: +(hi.length / span).toFixed(2), imp5: imp5.length, imp5Repeats, top, hiTop },
   patternsPer100y: patterns,
   eras: { count: eras.length, unique: new Set(eras).size, names: eras },
+  seals: { months4: sealMonths4, max: sealMax },
+  wars: (() => { const d = warDur.slice().sort((a, b) => a - b); return { n: warN, median: d.length ? +d[d.length >> 1].toFixed(1) : 0, over10: +(d.filter(x => x >= 10).length / Math.max(1, d.length)).toFixed(3), over30: d.filter(x => x >= 30).length, neighbor: +(warNb / Math.max(1, warN)).toFixed(2), same: +(warSame / Math.max(1, warN)).toFixed(2) }; })(),
+  people: (() => {
+    const alive = w.chars.filter(c => c.died < 0);
+    const named: Record<string, number> = {}; for (const c of alive) if (!c.archdemon && !c.paragon) named[c.race] = (named[c.race] ?? 0) + 1;
+    const pop: Record<string, number> = {}; for (const s of w.settlements) if (s.alive) pop[s.race] = (pop[s.race] ?? 0) + s.pop;
+    const totalPop = Object.values(pop).reduce((a, b) => a + b, 0), totalNamed = Object.values(named).reduce((a, b) => a + b, 0);
+    const demonL = alive.filter(c => c.l === 4 && !c.archdemon).length / Math.max(1, totalNamed);
+    const demonPop = w.settlements.filter(s => s.alive && s.l === 4).reduce((a, s) => a + s.pop, 0) / Math.max(1, totalPop);
+    const starved = Object.keys(pop).filter(r => pop[r] >= 10000 && (named[r] ?? 0) < 10);
+    const tr: number[] = []; for (const f of w.factions) if (f.alive) for (const t of f.treaties) { const o = w.factions[t.with]; if (o && o.alive) tr.push(tradeRoute(w, f, o).d); }
+    return { demonNamedShare: +demonL.toFixed(3), demonPopShare: +demonPop.toFixed(3), starved, popByRace: Object.fromEntries(Object.entries(pop).map(([k, v]) => [k, Math.round(v)])), namedByRace: named, tradeAvg: tr.length ? Math.round(tr.reduce((a, b) => a + b, 0) / tr.length) : 0 };
+  })(),
   early: { firstContact: firsts.contact ?? -1, firstTrade: firsts.trade ?? -1, firstWar: firsts.war ?? -1, caravansAvg: +(carSum / Math.max(1, carN)).toFixed(1) },
   world: { factionsEver: w.factions.length, factionsAlive: w.factions.filter(f => f.alive).length, charsAlive: living.length,
     pop: Math.round(w.factions.filter(f => f.alive).reduce((a, f) => a + f.pop, 0)), deaths: deaths.length,

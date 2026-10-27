@@ -1,4 +1,5 @@
 import { RACES, type RaceKey } from '../data/races';
+import { WORLD_LIFE } from './lifeData11';
 import { knows, knowsRealm } from './contact';
 import { makeName } from '../data/names';
 import { ADVENTURER_TIRED, JOB_SEARCH, buildPrompt, makeCtx, nearDeath, resolveLife, type LifeEv } from './life';
@@ -605,8 +606,8 @@ export function playerTick(w: World): void {
       const prompt = buildPrompt(x, ev);
       if (prompt) { setPrompt(prompt, ev.id); return; }
     }
-    // 쓰러진 몸, 마지막 말
-    for (const ev of CARE) {
+    // 쓰러진 몸, 마지막 말, 낯선 이들, 주둔지의 밤
+    for (const ev of [...CARE, ...WORLD_LIFE.filter(e => e.id === 'wl_contact' || e.id === 'wl_camp_night')]) {
       const last = P.lastEvents[ev.id];
       if ((ev.once && last !== undefined) || (last !== undefined && w.t - last < (ev.cd ?? 12))) continue;
       if (!ev.c(x)) continue;
@@ -624,7 +625,8 @@ export function playerTick(w: World): void {
     for (const ev of [...PERIL, ...DL_PERIL]) {
       const last = P.lastEvents[ev.id];
       if (!fitsLife(w, c, ev.id)) continue;
-      if (last !== undefined && w.t - last < (ev.cd ?? 6)) continue;
+      // 같은 재난을 거듭 겪으면 다시 묻기까지 오래 걸린다 (해안 재난이 한 생애에 수십 번 되풀이되지 않도록)
+      if (last !== undefined && w.t - last < cdFor(ev.id, ev.cd ?? 6)) continue;
       if (!ev.c(x)) continue;
       const prompt = buildPrompt(x, ev);
       if (prompt) { setPrompt(prompt, ev.id); return; }
@@ -716,7 +718,7 @@ export function playerTick(w: World): void {
 }
 
 const POOL: LifeEv[] = [...CHILD, ...ROMANCE, ...TRAIT, ...RACIAL, ...JOBS, ...POWER, ...GUARDIAN, ...DRAGON,
-  ...WORKS_EV, ...RENOWN, ...ARTFATE, ...GOVPATH, ...NEWJOBS, ...GUARDIAN2, ...ECON, ...SLAVE, ...TOWER, ...SEA_START, ...ALLIANCE_EV, ...STORY.filter(e => !STORY_FOLLOW.has(e.id)), ...CAREER, ...HOUSE, JOB_OFFER[1], ...ROYAL, ...RULE, ...ARCS];
+  ...WORKS_EV, ...RENOWN, ...ARTFATE, ...GOVPATH, ...NEWJOBS, ...GUARDIAN2, ...ECON, ...SLAVE, ...TOWER, ...SEA_START, ...ALLIANCE_EV, ...STORY.filter(e => !STORY_FOLLOW.has(e.id)), ...CAREER, ...HOUSE, JOB_OFFER[1], ...ROYAL, ...RULE, ...ARCS, ...WORLD_LIFE.filter(e => e.id !== 'wl_contact' && e.id !== 'wl_camp_night')];
 const POOL_HUMAN: LifeEv[] = POOL.filter(e => !DRAGON.includes(e));
 /** 돈벌이·출세와 무관한 성역의 수호자에게 어울리는 것들 */
 const MONEY_TRAITS = new Set(['t_greedy_purse', 't_cruel_chance', 't_prudent_invest', 't_reckless_bet', 't_traitor_whisper', 't_social_party', 't_loyal_test']);
@@ -746,7 +748,7 @@ function fitsLife(w: World, c: Character, id: string): boolean {
   if (RACES[c.race].needs[0] === 0 && UNDEAD_SKIP.has(id)) return false;
   return true;
 }
-const POOL_MAP = new Map<string, LifeEv>([...POOL, ...SEA, ...STORY, ...PERIL, ...MILESTONES, ...JOB_OFFER, ...INVITES, ...PARTY_EV, ...ARMY_EV, ...TRAVEL_EV, ...CARE, ...DL_PERIL, JOB_SEARCH, ADVENTURER_TIRED].map(e => [e.id, e]));
+const POOL_MAP = new Map<string, LifeEv>([...POOL, ...SEA, ...STORY, ...PERIL, ...MILESTONES, ...JOB_OFFER, ...INVITES, ...PARTY_EV, ...ARMY_EV, ...TRAVEL_EV, ...CARE, ...DL_PERIL, ...WORLD_LIFE, JOB_SEARCH, ADVENTURER_TIRED].map(e => [e.id, e]));
 export const LIFE_EVENT_COUNT = () => POOL.length + LIFE.length + 2;
 
 export function resolvePlayer(w: World, choiceId: string): string {

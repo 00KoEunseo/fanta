@@ -665,11 +665,12 @@ function bindInput() {
   document.addEventListener('click', e => {
     const w = S.w;
     if (!w) return;
-    const el = (e.target as HTMLElement).closest<HTMLElement>('[data-char],[data-set],[data-fac],[data-news],[data-portal],[data-logcat],[data-pfilter],[data-layer],[data-art],[data-house],[data-seal],[data-jump],[data-lifeall]');
+    const el = (e.target as HTMLElement).closest<HTMLElement>('[data-char],[data-set],[data-fac],[data-news],[data-portal],[data-logcat],[data-pfilter],[data-layer],[data-art],[data-house],[data-seal],[data-jump],[data-lifeall],[data-trackchar]');
     if (!el) return;
     const d = el.dataset;
     if (d.seal !== undefined) focusSeal(+d.seal);
     else if (d.lifeall !== undefined) { S.lifeAll = d.lifeall === '1'; updateBottom(); }
+    else if (d.trackchar !== undefined) { selectChar(+d.trackchar); S.track = +d.trackchar; updateInspect(); }
     else if (d.jump !== undefined) {
       const [l, x, y] = d.jump.split(',').map(Number);
       jumpTo({ l, x, y });

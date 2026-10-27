@@ -1,5 +1,5 @@
 import { caravanMaster, sendCaravan } from './caravan';
-import { borderFriction, clearWar, frictionReasons, negotiate, setTransfer } from './warfare';
+import { borderFriction, clearWar, frictionReasons, negotiate, setPeace, setTransfer } from './warfare';
 import { demonsServing } from './demons';
 import { CAMP_MAX, ensureCamp, sendToCamp } from './camps';
 import { faithWarFactor, faithWarReasons } from './religion';
@@ -16,7 +16,7 @@ import {
 import { EPITHETS } from '../data/names';
 import { addNews, charLog } from './news';
 import type { Character, Faction, Settlement, World } from './state';
-import { ageOf } from './state';
+import { ageOf, dist } from './state';
 import {
   addFacRel, addRel, aliveFactions, approxDist, atWar, charLabel, clamp, facRel, factionDistance, isAdult, leaderOf,
   rel, settlementsOf,
@@ -256,6 +256,21 @@ export function attemptCoup(w: World, c: Character): void {
   }
 }
 
+/** 너무 넓어진 나라: 수도에서 먼 고을(다른 겨레이거나 민심이 흉흉한 곳)이 영주를 앞세워 떨어져 나간다 (해마다) */
+function overstretch(w: World, f: Faction): void {
+  const n = f.settlements.length;
+  if (n < 9 || f.race === 'angel') return;
+  const cap = w.settlements[f.capital];
+  if (!cap) return;
+  const far = settlementsOf(w, f).filter(s => s.id !== f.capital && (s.l !== cap.l || dist(s, cap) > 35) && (s.race !== f.race || s.stability < 35));
+  const s = far.sort((a, b) => a.stability - b.stability)[0];
+  const gov = s && w.chars[s.governor];
+  if (!s || !gov || gov.died >= 0 || gov.isPlayer || gov.act.kind !== 'idle') return;
+  if (!w.rngSim.chance(Math.min(0.12, 0.015 * (n - 8)) * (f.legitimacy < 50 ? 1.5 : 1))) return;
+  addNews(w, `${f.name}의 변방 ${s.name}이(가) 멀리 떨어진 도성의 명을 더는 따르지 않았다. 영주 ${gov.name}이(가) 스스로 깃발을 올렸다.`, 3, 'politics', { pos: s, facs: [f.id], chars: [gov.id] });
+  secede(w, gov, s);
+}
+
 export function secede(w: World, c: Character, s: Settlement): Faction {
   const f = w.factions[s.faction];
   const nf = createFaction(w, s.race, s.name, 1);
@@ -453,6 +468,8 @@ export function tradeRoute(w: World, a: Faction, b: Faction): { d: number; sea: 
 // 이보다 먼 교역로는 열지 않는다 (먼 길은 짐이 상하고 도적이 많다)
 const TRADE_REACH = 80;
 
+const dlOf = (w: World) => (w.demonLord >= 0 ? w.chars[w.demonLord] : null);
+
 /** 국경을 맞댄 이웃 (해마다 다시 잰다: 땅을 훑는 일이라 매달 하기엔 무겁다) */
 const nbCache = new WeakMap<World, Map<number, { t: number; ids: Set<number> }>>();
 export function isNeighbor(w: World, a: Faction, b: Faction): boolean {
@@ -470,6 +487,8 @@ export function pWarMonth(w: World, a: Faction, b: Faction): number {
   if (knownYears(w, a, b) < 1) return 0;
   if ((a.truce[b.id] ?? -1) > w.t) return 0;
   if (RACES[a.race].noPop || !a.settlements.length || !b.settlements.length) return 0;
+  // 천사는 땅을 탐내 싸우지 않는다: 마왕과 그 가신, 언데드와의 성전만
+  if (a.race === 'angel' && !(dlOf(w)?.faction === b.id || b.flags.includes('dlvassal') || b.race === 'undead')) return 0;
   const r = facRel(a, b.id);
   const dl = w.demonLord >= 0 ? w.chars[w.demonLord] : null;
   let special = 1;
@@ -559,7 +578,10 @@ export function factionMonth(w: World, f: Faction): void {
 
   // 영주 임명
   assignGovernors(w, f);
-  if (w.t % 12 === f.id % 12) { const nb = borderNeighbors(w, f); updatePosture(w, f, nb); borderFriction(w, f, nb); }
+  if (w.t % 12 === f.id % 12) {
+    const nb = borderNeighbors(w, f); updatePosture(w, f, nb); borderFriction(w, f, nb);
+    overstretch(w, f);
+  }
 
   // 식량 위기 표시
   const foodM = stockMonths(w, f, FOOD);
@@ -695,6 +717,7 @@ function tryTrade(w: World, f: Faction, need: number): boolean {
 
 export function launchRaid(w: World, f: Faction): void {
   const rng = w.rngSim;
+  if (f.race === 'angel') return;
   const targets = w.settlements.filter(s => {
     if (!s.alive || s.faction === f.id) return false;
     const o = w.factions[s.faction];
@@ -763,6 +786,7 @@ function nearestOwn(w: World, f: Faction, p: Settlement): Settlement | null {
 }
 
 function tryColonize(w: World, f: Faction): void {
+  if (f.race === 'angel') return;
   const rng = w.rngSim;
   const R = RACES[f.race];
   if (R.noPop) return;
@@ -807,6 +831,12 @@ export function homelessMonth(w: World, c: Character): void {
   if (c.home >= 0 && w.settlements[c.home]?.alive && c.faction >= 0) return;
   // 열강은 어느 나라에도 깃들지 않는다
   if (c.race === 'dragon' || c.act.kind !== 'idle' || c.paragon || c.archdemon) return;
+  // 천사는 다른 종족의 나라에 의탁하지 않는다: 남은 천사의 나라로 가거나, 홀로 하늘을 지킨다
+  if (c.race === 'angel') {
+    const home = w.factions.find(o => o.alive && o.race === 'angel' && w.settlements[o.capital]?.alive);
+    if (home) { const cap = w.settlements[home.capital]; c.faction = home.id; c.home = cap.id; relocate(w, c, cap); }
+    return;
+  }
   // 나라를 잃은 '나'는 먼저 스스로 거취를 고른다 (한 해 동안은 기다린다)
   if (c.isPlayer && w.player && ['peril_fall', 'peril_fallen'].some(k => (w.player!.flags?.[k] ?? -99) >= w.t - 12)) return;
   if (c.faction >= 0 && w.factions[c.faction]?.alive) {
@@ -830,3 +860,4 @@ export function homelessMonth(w: World, c: Character): void {
 
 // 강화 조건으로 고을을 넘길 때 쓴다
 setTransfer((w, s, f) => transferSettlement(w, s, f));
+setPeace((w, a, b) => makePeace(w, a, b));

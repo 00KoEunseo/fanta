@@ -424,8 +424,8 @@ export function storiesTab(w: World): string {
   const now = currentStories(w);
   const ended = (w.storyBook?.ended ?? []).slice().reverse().slice(0, 15);
   const jump = (p?: { l: number; x: number; y: number }) => p ? ` data-jump="${p.l},${Math.round(p.x)},${Math.round(p.y)}" title="눌러서 그곳으로"` : '';
-  return `<p class="dim" style="margin:0 0 6px">지금 세상을 움직이는 큰 이야기들. 무게가 큰 것부터 보인다. 카드를 누르면 그곳으로 간다.</p>
-    <div class="stories">${now.map(s => `<div class="story story-${s.kind}"${jump(s.pos)}><b>${storyIcon(s.kind)} ${esc(s.title)}</b><small>${dateStr(w, s.since)}부터</small>${s.lines.map(l => `<div>${esc(l)}</div>`).join('')}</div>`).join('') || '<div class="dim">세상이 고요하다. 큰 이야기가 없다.</div>'}</div>
+  return `<p class="dim" style="margin:0 0 6px">지금 세상을 움직이는 큰 이야기들. 무게가 큰 것부터 보인다. 인물이 있는 카드는 누르면 그 인물을 따라가고, 나머지는 그곳으로 간다.</p>
+    <div class="stories">${now.map(s => `<div class="story story-${s.kind}"${s.char !== undefined && w.chars[s.char]?.died < 0 ? ` data-trackchar="${s.char}" title="눌러서 이 인물을 따라가기"` : jump(s.pos)}><b>${storyIcon(s.kind)} ${esc(s.title)}</b><small>${dateStr(w, s.since)}부터</small>${s.lines.map(l => `<div>${esc(l)}</div>`).join('')}</div>`).join('') || '<div class="dim">세상이 고요하다. 큰 이야기가 없다.</div>'}</div>
     ${ended.length ? `<div class="sec">최근에 끝난 이야기</div><div class="log">${ended.map(e => `<div><span class="when">${storyYears(w, e.t0, e.t1)}</span>${storyIcon(e.kind)} <b>${esc(e.title)}</b> — ${esc(e.end)}</div>`).join('')}</div>` : ''}`;
 }
 

@@ -189,6 +189,8 @@ export interface Character extends Pos {
   sleep?: number;
   /** 믿는 신앙 */
   faith?: number;
+  /** 천사가 맡은 임무 (역병·기근·마왕의 군세) */
+  angelTask?: import('./angels').AngelTask;
   /** 악마: 마계의 예순여섯 (세력 없음) */
   archdemon?: import('./demons').Archdemon;
   /** 열강: 나라를 떠나 홀로 선 강자 */

@@ -96,6 +96,8 @@ function heard(w: World, f: Faction, o: Faction): boolean {
 /** 첫 만남: 종족 사이의 감정과 만난 이의 성품에 따라 좋게도, 나쁘게도 흘러간다 */
 function firstMeeting(w: World, c: Character, f: Faction, o: Faction, at: Settlement | null): void {
   const rng = w.rngSim;
+  // '나'의 첫 만남은 선택지로 (탄생 모드)
+  if (c.isPlayer && w.player) { w.player.flags ??= {}; w.player.flags.metFac = o.id; w.player.flags.metFacT = w.t; }
   const warm = raceAffinity(f.race, o.race) / 100 + (c.traits[3] - 50) / 150 + (c.traits[7] - 50) / 200;
   const good = rng.chance(Math.min(0.9, Math.max(0.1, 0.5 + warm)));
   const line = good ? GOOD[(w.t + c.id) % GOOD.length] : BAD[(w.t + c.id) % BAD.length];

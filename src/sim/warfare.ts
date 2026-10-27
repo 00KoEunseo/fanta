@@ -74,12 +74,12 @@ export function negotiate(w: World, f: Faction, e: Faction, makePeace: (w: World
     makePeace(w, f, e);
     return true;
   }
-  if (lscore > -25) return false;
-  // 갓 시작한 전쟁은 수도를 잃을 만큼 무너지지 않는 한 쉽게 무릎 꿇지 않는다
-  if (years < 1.5 && lscore > -60) return false;
+  if (lscore > -35) return false;
+  // 갓 시작한 전쟁은 크게 무너지지 않는 한 쉽게 무릎 꿇지 않는다
+  if (years < 2 && lscore > -80) return false;
   // 버틸 만하면 버틴다: 군세가 비등하고 아직 크게 무너지지 않았다
   const ratio = loser.military / Math.max(1, winner.military);
-  if (ratio > 0.85 && lscore > -70 && rng.chance(0.7)) return false;
+  if (ratio > 0.7 && lscore > -90 && rng.chance(0.75)) return false;
   // 같은 상대에게 너무 자주 청하지 않는다
   const sl = ws(loser, winner.id);
   if (sl.asked !== undefined && w.t - sl.asked < 12) return false;
@@ -125,3 +125,34 @@ export function negotiate(w: World, f: Faction, e: Faction, makePeace: (w: World
 let transfer: (w: World, s: Settlement, f: Faction) => void = () => {};
 /** 고을을 넘기는 함수 (factions.ts가 넣어 준다: 서로를 불러오는 고리를 피하려고) */
 export function setTransfer(fn: (w: World, s: Settlement, f: Faction) => void): void { transfer = fn; }
+
+/** 군주인 '나'가 밀리는 전쟁에서 조건을 내걸고 강화를 청한다. 결과 문장을 돌려준다 */
+export function offerTerms(w: World, loser: Faction, winner: Faction, kind: 'gold' | 'land'): string {
+  const sl = ws(loser, winner.id);
+  const wl = leaderOf(w, winner);
+  const greed = wl ? 1 + (wl.traits[AMBITION] - 50) / 100 + (50 - wl.traits[COMPASSION]) / 150 : 1;
+  const want = Math.max(10, -sl.score) * greed;
+  const lcap = w.settlements[loser.capital], wcap = w.settlements[winner.capital];
+  let value = 0, what = '';
+  let ceded: Settlement | undefined;
+  if (kind === 'gold') {
+    const gold = lcap ? Math.min(lcap.stock[GOLD] * 0.8, 600) : 0;
+    value = gold / 8; what = `금 ${Math.round(gold)}`;
+    if (value >= want * 0.8 && lcap && wcap) { lcap.stock[GOLD] -= gold; wcap.stock[GOLD] += gold; }
+  } else {
+    ceded = settlementsOf(w, loser).filter(s => s.id !== loser.capital).sort((a, b) => (wcap && a.l === wcap.l ? dist(a, wcap) : 999) - (wcap && b.l === wcap.l ? dist(b, wcap) : 999))[0];
+    if (!ceded) return '내줄 만한 고을이 수도밖에 남지 않았다. 사신은 빈손으로 돌아왔다.';
+    value = 25 + ceded.pop / 40; what = ceded.name;
+  }
+  if (value < want * 0.8) {
+    addNews(w, `${loser.name}이(가) ${what}을(를) 내걸고 강화를 청하였으나, ${winner.name}은(는) 물리쳤다.`, 2, 'war', { facs: [loser.id, winner.id] });
+    return `${winner.name}은(는) ${what}(으)로는 모자라다며 사신을 돌려보냈다.`;
+  }
+  if (ceded) transfer(w, ceded, winner);
+  peaceFn(w, loser, winner);
+  addNews(w, `${loser.name}이(가) ${what}을(를) 내주고 ${winner.name}에게 강화를 청하였다. ${winner.name}이(가) 받아들였다.`, 3, 'war', { facs: [loser.id, winner.id] });
+  return `${what}을(를) 내주고 강화를 맺었다. 궁정에 무거운 침묵이 내려앉았다.`;
+}
+
+let peaceFn: (w: World, a: Faction, b: Faction) => void = () => {};
+export function setPeace(fn: (w: World, a: Faction, b: Faction) => void): void { peaceFn = fn; }

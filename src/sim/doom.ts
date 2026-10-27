@@ -64,7 +64,7 @@ export function pDoomMonth(w: World): number {
   const n = brokenCount(w);
   if (n < 4) return 0;
   // 넷이 겹쳐도 세계는 쉽게 무너지지 않는다. 다섯, 여섯이 겹칠수록 급격히 위험해진다
-  return 0.00015 * Math.pow(4, n - 4);
+  return 0.00002 * Math.pow(5, n - 4);
 }
 
 export function omen(w: World): string {
