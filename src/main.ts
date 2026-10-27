@@ -78,6 +78,10 @@ const S = {
   deathShown: false,
   endShown: false,
   artSel: -1,
+  /** 나의 일대기: 사소한 줄까지 모두 보기 */
+  lifeAll: false,
+  /** 큰일이 생기면 속도를 늦춘다 */
+  autoSlow: true,
   /** 여러 해 건너뛰기 진행 상태 */
   ff: null as null | { target: number; snap: Snapshot; years: number; stopped: string },
 };
@@ -140,7 +144,13 @@ async function loadFromFile(f: File) {
 function doTick(render = true) {
   const w = S.w;
   if (!w || w.doom.ended) return;
+  const firstNew = w.nextNewsId;
   tick(w);
+  // 빠르게 흘려보내다 세상을 뒤흔드는 일이 생기면 '중간' 속도로 늦춘다
+  if (S.autoSlow && !S.ff && !S.skipping && !S.paused && S.speed >= 2) {
+    const big = w.news.find(n => n.id >= firstNew && n.imp >= 5);
+    if (big) { setSpeed(1); M.toast(`큰일이 일어나 속도를 늦추었다 — ${big.text.slice(0, 40)}…`); }
+  }
   renderer.tickTime = performance.now();
   renderer.animMs = Math.min(1500, SPEEDS[S.speed] * 0.6);
   renderer.refreshTerritory();
@@ -293,6 +303,9 @@ function updateAll() {
     b.classList.toggle('on', v === -1 ? S.paused : !S.paused && v === S.speed);
   });
   $('news-list').innerHTML = P.newsHTML(w, S.newsRange);
+  // 최근 2년의 큰 사건 자리
+  renderer.pins = [];
+  for (let i = w.news.length - 1; i >= 0; i--) { const n = w.news[i]; if (n.t < w.t - 24) break; if (n.imp >= 4 && n.pos) renderer.pins.push({ l: n.pos.l, x: n.pos.x, y: n.pos.y, imp: n.imp, age: w.t - n.t }); }
   document.querySelectorAll<HTMLButtonElement>('#news-range button').forEach(b => b.classList.toggle('on', +b.dataset.range! === S.newsRange));
   updateInspect();
   updateBottom();
@@ -355,7 +368,8 @@ function updateBottom() {
       break;
     case 'seals': body.innerHTML = P.sealsTab(w); break;
     case 'stats': body.innerHTML = P.statsTab(w); break;
-    case 'mylife': body.innerHTML = P.myLifeTab(w); break;
+    case 'mylife': body.innerHTML = P.myLifeTab(w, S.lifeAll); break;
+    case 'stories': body.innerHTML = P.storiesTab(w); break;
     case 'achv': body.innerHTML = P.achievementsTab(unlocked); break;
     case 'arts': body.innerHTML = P.artifactsTab(w, S.artSel); break;
   }
@@ -600,6 +614,8 @@ function bindInput() {
   ($('chk-armies') as HTMLInputElement).addEventListener('change', e => { renderer.showArmies = (e.target as HTMLInputElement).checked; });
   ($('chk-names') as HTMLInputElement).addEventListener('change', e => { renderer.showNames = (e.target as HTMLInputElement).checked; });
   ($('chk-secret') as HTMLInputElement).addEventListener('change', e => { S.secret = (e.target as HTMLInputElement).checked; updateInspect(); });
+  ($('chk-pins') as HTMLInputElement).addEventListener('change', e => { renderer.showPins = (e.target as HTMLInputElement).checked; });
+  ($('chk-slow') as HTMLInputElement).addEventListener('change', e => { S.autoSlow = (e.target as HTMLInputElement).checked; });
   document.querySelectorAll<HTMLButtonElement>('#news-range button').forEach(b => b.addEventListener('click', () => {
     S.newsRange = +b.dataset.range!;
     updateAll();
@@ -615,10 +631,17 @@ function bindInput() {
   document.addEventListener('click', e => {
     const w = S.w;
     if (!w) return;
-    const el = (e.target as HTMLElement).closest<HTMLElement>('[data-char],[data-set],[data-fac],[data-news],[data-portal],[data-logcat],[data-pfilter],[data-layer],[data-art],[data-house],[data-seal]');
+    const el = (e.target as HTMLElement).closest<HTMLElement>('[data-char],[data-set],[data-fac],[data-news],[data-portal],[data-logcat],[data-pfilter],[data-layer],[data-art],[data-house],[data-seal],[data-jump],[data-lifeall]');
     if (!el) return;
     const d = el.dataset;
     if (d.seal !== undefined) focusSeal(+d.seal);
+    else if (d.lifeall !== undefined) { S.lifeAll = d.lifeall === '1'; updateBottom(); }
+    else if (d.jump !== undefined) {
+      const [l, x, y] = d.jump.split(',').map(Number);
+      jumpTo({ l, x, y });
+      const st = w.settlements.find(s => s.alive && s.l === l && s.x === x && s.y === y);
+      if (st) selectSettlement(st.id, false);
+    }
     else if (d.house !== undefined) { S.inspect = { kind: 'house', id: +d.house }; updateInspect(); }
     else if (d.art !== undefined) { S.artSel = +d.art; S.bottomTab = 'arts'; updateBottom(); }
     else if (d.layer !== undefined) switchLayer(+d.layer);

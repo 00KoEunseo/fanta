@@ -232,6 +232,8 @@ export interface Era {
   end: number;
   counters: Record<string, number>;
   highlights: number[];
+  /** 시대가 끝날 때 엮은 연대기의 한 장 (소식이 지워져도 남는다) */
+  chapter?: string[];
 }
 
 export interface Prophecy { text: string; p: number; imp: number; cat: NewsCat }
@@ -362,6 +364,8 @@ export interface World {
   towers: import('./towers').Tower[];
   /** 이름 있는 병들 */
   diseases: import('./disease').Disease[];
+  /** 큰 이야기들의 기록부 (이야기 탭) */
+  storyBook?: import('./stories').StoryBook;
   /** 이름 있는 명품과 작품들 */
   artifacts: import('./artifacts').Artifact[];
   /** 이번 턴에 달성한 업적 (UI가 가져가 저장한다) */

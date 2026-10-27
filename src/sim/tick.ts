@@ -2,6 +2,7 @@ import { RACES } from '../data/races';
 import { raiseArmy } from './military';
 import { assignPioneers } from './pioneer';
 import { clashMonth, dragonClashes } from './clash';
+import { updateStories } from './stories';
 import { addNews } from './news';
 import { eraTick } from './news';
 import type { World } from './state';
@@ -69,6 +70,7 @@ export function tick(w: World): void {
   expeditionMonth(w);
   restockSites(w);
   seasonFiller(w);
+  updateStories(w);
   playerTick(w);
 }
 

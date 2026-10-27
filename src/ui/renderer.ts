@@ -23,6 +23,9 @@ export class MapRenderer {
   showChars = true;
   showArmies = true;
   showNames = true;
+  /** 최근 큰 사건의 자리 (지도 위 표시) */
+  showPins = true;
+  pins: { l: number; x: number; y: number; imp: number; age: number }[] = [];
   selectedChar = -1;
   selectedSettlement = -1;
   selectedTile: { l: number; x: number; y: number } | null = null;
@@ -471,6 +474,23 @@ export class MapRenderer {
           glyph(ctx, '⚒', sx + Math.max(5, s * 0.55), sy - Math.max(5, s * 0.55));
         }
       }
+    }
+    // 최근 큰 사건의 자리: 오래될수록 흐려지는 마름모, 가장 큰 일은 붉게 고동친다
+    if (this.showPins) {
+      for (const p of this.pins) {
+        if (p.l !== cam.l) continue;
+        const [sx, sy] = this.toScreen(p.x + 0.5, p.y + 0.5);
+        const fade = Math.max(0.25, 1 - p.age / 24);
+        const r = Math.max(4, s * 0.45) * (p.imp >= 5 ? 1 + 0.15 * Math.sin(now / 250) : 1);
+        ctx.globalAlpha = fade;
+        ctx.fillStyle = p.imp >= 5 ? '#ff4a3a' : '#ffd060';
+        ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy - r * 2.2); ctx.lineTo(sx + r * 0.7, sy - r * 1.4); ctx.lineTo(sx, sy - r * 0.6); ctx.lineTo(sx - r * 0.7, sy - r * 1.4); ctx.closePath();
+        ctx.fill(); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
     }
     // 이름표
     ctx.font = `${Math.max(10, Math.min(14, s * 0.75))}px "Malgun Gothic", sans-serif`;

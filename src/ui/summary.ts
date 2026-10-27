@@ -6,6 +6,8 @@ import { dateStr } from '../sim/state';
 import { SEAL_NAMES } from '../sim/doom';
 import { charLink, esc, facLink, newsItemHTML } from './panels';
 
+import { fixJosa } from '../data/text';
+import { currentStories, storyIcon, storyYears } from '../sim/stories';
 export interface Snapshot {
   t: number;
   newsId: number;
@@ -50,6 +52,10 @@ export function summaryHTML(w: World, s: Snapshot, interrupted: string): string 
   const sealChanges = w.doom.seals.map((b, i) => (b !== s.seals[i] ? `${b ? '🔴 붕괴' : '🟢 회복'}: ${SEAL_NAMES[i]}` : '')).filter(Boolean);
   const newEras = w.eras.slice(Math.max(0, s.eras - 1)).filter(e => e.end >= 0 && e.end >= s.t).map(e => e.name);
   const newArts = w.artifacts.slice(s.artifacts);
+  // 이 기간에 막을 내린 큰 이야기, 지금도 이어지는 큰 이야기
+  const endedStories = (w.storyBook?.ended ?? []).filter(e => e.t1 >= s.t);
+  const openStories = currentStories(w).slice(0, 4);
+  const chapters = w.eras.filter(e => e.end >= s.t && e.chapter?.length);
 
   const counts: Record<string, number> = {};
   for (const n of news) counts[n.cat] = (counts[n.cat] ?? 0) + 1;
@@ -62,7 +68,7 @@ export function summaryHTML(w: World, s: Snapshot, interrupted: string): string 
     if (c) {
       const bio = c.bio.filter(b => b.t >= s.t).slice(-8);
       playerBlock = `<h3>나의 이야기</h3>
-        <p>${charLink(w, c)} ${c.died >= 0 ? `— <b style="color:var(--red)">${dateStr(w, c.died)} ${esc(c.cause)}(으)로 세상을 떠남</b>` : ''}<br>
+        <p>${charLink(w, c)} ${c.died >= 0 ? `— <b style="color:var(--red)">${dateStr(w, c.died)} ${esc(fixJosa(`${c.cause}(으)로 세상을 떠남`))}</b>` : ''}<br>
         <small>재산 ${fmtNum(s.playerWealth)} → ${fmtNum(c.wealth)} · 명성 ${fmtNum(s.playerFame)} → ${fmtNum(c.fame)}</small></p>
         <div class="log">${bio.map(b => `<div><span class="when">${dateStr(w, b.t)}</span>${esc(b.text)}</div>`).join('') || '<span class="dim">조용한 세월이었다.</span>'}</div>`;
     }
@@ -79,6 +85,9 @@ export function summaryHTML(w: World, s: Snapshot, interrupted: string): string 
     </div>
     ${newEras.length ? `<p>저물어 간 시대: <b>${newEras.map(esc).join(', ')}</b></p>` : ''}
     ${sealChanges.length ? `<h3>일곱 봉인</h3><div>${sealChanges.map(esc).join('<br>')}</div>` : ''}
+    ${chapters.map(e => `<h3>연대기 — ${esc(e.name)}</h3><div class="chapter">${e.chapter!.map(l => `<p>${esc(l)}</p>`).join('')}</div>`).join('')}
+    ${endedStories.length ? `<h3>막을 내린 이야기</h3><div>${endedStories.map(e => `<div>${storyIcon(e.kind)} <b>${esc(e.title)}</b> <small>${storyYears(w, e.t0, e.t1)}</small> — ${esc(e.end)}</div>`).join('')}</div>` : ''}
+    ${openStories.length ? `<h3>이어지는 이야기</h3><div>${openStories.map(o => `<div>${storyIcon(o.kind)} <b>${esc(o.title)}</b> — ${esc(o.lines[0])}</div>`).join('')}</div>` : ''}
     ${playerBlock}
     <h3>주요 사건</h3>
     <div class="sum-news">${big.map(n => newsItemHTML(w, n)).join('') || '<p class="dim">세상을 뒤흔든 큰 사건은 없었다.</p>'}</div>

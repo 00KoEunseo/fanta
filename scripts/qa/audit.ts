@@ -41,9 +41,11 @@ async function pool<T>(jobs: (() => Promise<T>)[], n: number): Promise<T[]> {
 }
 
 const t0 = Date.now();
-const jobs = [...WORLDS.map(s => () => run('world.ts', [s, String(YEARS)])), ...LIVES.map(a => () => run('life.ts', a))];
+// 화면 연기 시험은 세계 검증과 함께 한 번 돌린다
+const UI = livesArg ? [] : [['UI-1', String(quick ? 120 : 250)]];
+const jobs = [...WORLDS.map(s => () => run('world.ts', [s, String(YEARS)])), ...UI.map(a => () => run('ui-smoke.ts', a)), ...LIVES.map(a => () => run('life.ts', a))];
 const results = await pool(jobs, 6);
-const worlds = results.slice(0, WORLDS.length), lives = results.slice(WORLDS.length);
+const worlds = results.slice(0, WORLDS.length), uis = results.slice(WORLDS.length, WORLDS.length + UI.length), lives = results.slice(WORLDS.length + UI.length);
 
 type Check = { name: string; ok: boolean; detail: string; warn?: boolean };
 const checks: Check[] = [];
@@ -67,6 +69,14 @@ for (const r of W) {
   chk(`[${r.seed}] 명품 쏠림`, r.world.maxArtifactsHeld <= 5, `한 사람 최대 ${r.world.maxArtifactsHeld}개`, true);
   chk(`[${r.seed}] 세력 생존`, r.world.factionsAlive >= 4, `생존 ${r.world.factionsAlive} / 누적 ${r.world.factionsEver}`);
   chk(`[${r.seed}] 직업 쏠림`, !r.world.topRole || r.world.topRole[1] < 0.2, `최다 직업 ${r.world.topRole?.join(' ')}`, true);
+}
+// ── 화면
+for (const r of uis) {
+  if (r.error) { chk('화면 연기 시험 실행', false, r.error); continue; }
+  chk(`[${r.seed}] 화면 오류`, !r.errors.length, r.errors.join(' | ') || '없음');
+  const bad = Object.entries(r.bad).map(([k, v]: [string, any]) => `${k}: ${v[0]}`).join(' | ');
+  chk(`[${r.seed}] 화면의 빈 값·조사 표기`, !bad, bad || '없음');
+  chk(`[${r.seed}] 연대기의 장`, r.chapters.every((c: any) => c.lines >= 2), r.chapters.map((c: any) => `${c.name} ${c.lines}줄`).join(', '));
 }
 // ── 생애 불변식
 for (const r of Lf) {

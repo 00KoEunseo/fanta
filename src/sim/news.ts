@@ -172,11 +172,26 @@ export function eraName(w: World, era: Era, idx: number): string {
   return base;
 }
 
+/** 연대기의 한 장을 엮는다: 그 시대의 가장 큰 일 서너 가지와, 일어나고 무너진 나라의 수 */
+function compileChapter(w: World, era: Era): string[] {
+  const ids = new Set(era.highlights);
+  const inEra = w.news.filter(n => n.t >= era.start && n.t <= era.end);
+  const big = inEra.filter(n => ids.has(n.id)).sort((a, b) => b.imp - a.imp || a.t - b.t).slice(0, 4).sort((a, b) => a.t - b.t);
+  const first = (t: string) => { const m = t.match(/^.+?[.!?](?=\s|$)/); return (m ? m[0] : t).replace(/^【[^】]*】\s*/, ''); };
+  const lines = big.map(n => `${yearOf(w, n.t)}년, ${first(n.text)}`);
+  const fell = inEra.filter(n => /멸망하였다/.test(n.text)).length;
+  const rose = inEra.filter(n => /왕국을 세웠다|제국을 선포하였다|독립하였다|깃발을 올렸다/.test(n.text)).length;
+  const yrs = Math.round((era.end - era.start) / 12);
+  lines.push(`${yrs}년 동안 ${rose ? `나라 ${rose}곳이 일어나고 ` : ''}${fell ? `${fell}곳이 무너졌다.` : '무너진 나라는 없었다.'}`);
+  return lines;
+}
+
 export function startEra(w: World): void {
   const prev = w.eras[w.eras.length - 1];
   if (prev) {
     prev.end = w.t;
     prev.name = eraName(w, prev, w.eras.length - 1);
+    prev.chapter = compileChapter(w, prev);
     addNews(w, `${yearOf(w)}년, '${prev.name}'이 저물고 새 시대가 열렸다.`, 3, 'politics');
   }
   w.eras.push({ name: '', start: w.t, end: -1, counters: {}, highlights: [] });

@@ -258,3 +258,21 @@ table.t tr:hover td { background: #201b13; cursor: pointer; }
 
 .story-sum { margin: 0 0 8px; padding: 6px 10px; border: 1px solid var(--line); border-left: 3px solid var(--gold); border-radius: 4px; background: rgba(255,210,120,0.05); font-size: 12.5px; line-height: 1.6; }
 .story-sum b { color: var(--gold); display: block; margin-bottom: 2px; }
+
+/* 이야기 탭 */
+.stories { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.story { padding: 6px 9px; border: 1px solid var(--line); border-left: 3px solid var(--dim); border-radius: 4px; background: var(--panel2); font-size: 12px; line-height: 1.55; }
+.story b { display: block; color: var(--text); }
+.story small { display: block; color: var(--dim); margin-bottom: 2px; }
+.story[data-jump] { cursor: pointer; }
+.story[data-jump]:hover { border-color: var(--gold); }
+.story-war { border-left-color: var(--red); }
+.story-dl { border-left-color: var(--violet); }
+.story-dragon { border-left-color: #ff9a3a; }
+.story-plague { border-left-color: #b6ff3a; }
+.story-party { border-left-color: var(--gold); }
+.story-abyss { border-left-color: #2affc8; }
+/* 연대기의 장 */
+.chapter { margin: 2px 0 4px; padding: 4px 10px; border-left: 2px solid var(--gold); color: var(--text); font-size: 12.5px; line-height: 1.6; }
+.chapter p { margin: 0 0 2px; }
+.era details summary { cursor: pointer; font-size: 11.5px; }

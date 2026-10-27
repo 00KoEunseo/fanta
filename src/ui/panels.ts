@@ -3,13 +3,14 @@ import { storySummary } from '../sim/lifeData7';
 import { STYLE_DESC, expandStyle } from '../sim/territory';
 import { RES_COLORS, RES_NAMES, TERRAIN } from '../data/terrain';
 import { APT_NAMES, STAT_NAMES, TRAIT_NAMES, describeTraits } from '../data/traits';
-import { fmtNum, pct } from '../data/text';
+import { fixJosa, fmtNum, pct } from '../data/text';
 import type { Character, Faction, NewsItem, Settlement, World } from '../sim/state';
 import { LAYER_INFO, SEASON_NAMES, ageOf, dateStr, seasonOf } from '../sim/state';
 import { charLabel, isHero, leaderOf, settlementsOf, titleOf } from '../sim/helpers';
 import { SEAL_NAMES, brokenCount, omen, sealTotal, sealVisible } from '../sim/doom';
 import { seaThingsAt } from '../sim/sea';
 import { eraName } from '../sim/news';
+import { currentStories, storyIcon, storyYears } from '../sim/stories';
 import { capacity } from '../sim/settlements';
 import { ACHIEVEMENTS, TIER_COLORS, TIER_NAMES } from '../sim/achievements';
 import { artLabel, vigor, vigorWord } from '../sim/artifacts';
@@ -220,6 +221,7 @@ export function inspectFaction(w: World, f: Faction): string {
       <span>인구</span><span>${fmtNum(f.pop)}</span>
       <span>군사력</span><span>${fmtNum(f.military)}</span>
       <span>평균 발전</span><span>${Math.round(f.avgDev)}</span>
+      <span title="땅은 사람이 있어야 지켜진다. 고을마다 12칸 + 인구 3명당 1칸을 지킬 수 있고, 넘치는 땅은 매달 조금씩 손을 놓는다">영토 ⓘ</span><span>${ss.reduce((a, s) => a + s.tiles.length, 0)}칸 / 지킬 수 있는 땅 ${Math.round(ss.reduce((a, s) => a + 12 + s.pop / 3, 0))}칸</span>
       <span>정통성</span><span>${Math.round(f.legitimacy)}</span>
       <span>확장 성향</span><span>${(() => { const st = expandStyle(w, f); return `${st} <small class="dim">— ${STYLE_DESC[st]}</small>`; })()}</span>
       <span>동맹</span><span>${(() => { const al = w.alliances.find(a => a.alive && a.members.includes(f.id)); return al ? `${esc(al.name)}${al.leader === f.id ? ' <b style="color:var(--gold)">(수장)</b>' : ''} · 적: ${charLink(w, w.chars[al.enemy])}` : f.flags.includes('dlvassal') ? '<b style="color:var(--red)">마왕군 가신</b>' : '<span class="dim">없음</span>'; })()}</span>
@@ -241,7 +243,7 @@ export function inspectFaction(w: World, f: Faction): string {
     })()}
     <div class="sec">세력의 일대기</div>
     <div class="log">
-      <div><span class="when">${dateStr(w, f.founded)}</span><b>${esc(f.name.replace(/ (왕국|제국|공국|대왕국)$/, ''))}이(가) 일어섰다.</b></div>
+      <div><span class="when">${dateStr(w, f.founded)}</span><b>${esc(fixJosa(`${f.name.replace(/ (왕국|제국|공국|대왕국)$/, '')}이(가) 일어섰다.`))}</b></div>
       ${(f.history ?? w.news.filter(n => n.facs?.includes(f.id) && n.imp >= 4).map(n => ({ t: n.t, text: n.text, imp: n.imp })))
         .map(h => `<div class="imp${h.imp}"><span class="when">${dateStr(w, h.t)}</span>${linkify(w, h.text)}</div>`).join('')}
       ${f.alive ? '' : `<div><span class="when">${dateStr(w, f.fell)}</span><b style="color:var(--red)">멸망하였다.</b></div>`}
@@ -314,8 +316,9 @@ export function chronicleTab(w: World): string {
     const idx = w.eras.length - 1 - ri;
     const name = e.end < 0 ? `${eraName(w, e, idx)} <small>(진행 중)</small>` : esc(e.name);
     const hl = e.highlights.map(id => byId.get(id)).filter((n): n is NewsItem => !!n).slice(-14).reverse();
-    return `<div class="era"><h4>${name} <small>${dateStr(w, e.start)} ~ ${e.end >= 0 ? dateStr(w, e.end) : ''}</small></h4>
-      ${hl.map(n => newsItemHTML(w, n)).join('') || '<div class="dim">기록할 만한 일이 아직 없다.</div>'}</div>`;
+    const chapter = e.chapter?.length ? `<div class="chapter">${e.chapter.map(l => `<p>${linkify(w, l)}</p>`).join('')}</div>` : '';
+    return `<div class="era"><h4>${name} <small>${dateStr(w, e.start)} ~ ${e.end >= 0 ? dateStr(w, e.end) : ''}</small></h4>${chapter}
+      ${hl.length ? (chapter ? `<details><summary class="dim">그 시대의 소식 ${hl.length}건</summary>${hl.map(n => newsItemHTML(w, n)).join('')}</details>` : hl.map(n => newsItemHTML(w, n)).join('')) : chapter ? '' : '<div class="dim">기록할 만한 일이 아직 없다.</div>'}</div>`;
   }).join('');
 }
 
@@ -390,12 +393,26 @@ export function statsTab(w: World): string {
     </div></div></div>`;
 }
 
-export function myLifeTab(w: World): string {
+export function myLifeTab(w: World, all = false): string {
   const P = w.player;
   if (!P) return '';
   const c = w.chars[P.charId];
   const sum = storySummary(w, c);
-  return `<div class="story-sum"><b>${esc(c.epithet ? `${c.epithet} ${c.name}` : c.name)}의 이야기</b>${sum.map(l => `<div>${esc(l)}</div>`).join('')}</div><div class="log">${c.bio.slice().reverse().map(b => `<div${(b.imp ?? 2) <= 1 ? ' class="dim"' : ''}><span class="when">${dateStr(w, b.t)}</span>${linkify(w, b.text)}</div>`).join('')}</div>`;
+  // 계절 문구 같은 사소한 줄은 기본으로 접어 둔다
+  const lines = c.bio.filter(b => all || (b.imp ?? 2) >= 2);
+  const hidden = c.bio.length - lines.length;
+  const toggle = `<div class="tabs" style="margin:4px 0"><button class="mini ${all ? '' : 'on'}" data-lifeall="0">중요한 일만</button><button class="mini ${all ? 'on' : ''}" data-lifeall="1">전부${hidden ? ` (+${hidden})` : ''}</button></div>`;
+  return `<div class="story-sum"><b>${esc(c.epithet ? `${c.epithet} ${c.name}` : c.name)}의 이야기</b>${sum.map(l => `<div>${esc(l)}</div>`).join('')}</div>${toggle}<div class="log">${lines.slice().reverse().map(b => `<div${(b.imp ?? 2) <= 1 ? ' class="dim"' : ''}><span class="when">${dateStr(w, b.t)}</span>${linkify(w, b.text)}</div>`).join('')}</div>`;
+}
+
+/** 이야기 탭: 지금 이어지는 큰 이야기와, 최근에 끝난 이야기 */
+export function storiesTab(w: World): string {
+  const now = currentStories(w);
+  const ended = (w.storyBook?.ended ?? []).slice().reverse().slice(0, 15);
+  const jump = (p?: { l: number; x: number; y: number }) => p ? ` data-jump="${p.l},${Math.round(p.x)},${Math.round(p.y)}" title="눌러서 그곳으로"` : '';
+  return `<p class="dim" style="margin:0 0 6px">지금 세상을 움직이는 큰 이야기들. 무게가 큰 것부터 보인다. 카드를 누르면 그곳으로 간다.</p>
+    <div class="stories">${now.map(s => `<div class="story story-${s.kind}"${jump(s.pos)}><b>${storyIcon(s.kind)} ${esc(s.title)}</b><small>${dateStr(w, s.since)}부터</small>${s.lines.map(l => `<div>${esc(l)}</div>`).join('')}</div>`).join('') || '<div class="dim">세상이 고요하다. 큰 이야기가 없다.</div>'}</div>
+    ${ended.length ? `<div class="sec">최근에 끝난 이야기</div><div class="log">${ended.map(e => `<div><span class="when">${storyYears(w, e.t0, e.t1)}</span>${storyIcon(e.kind)} <b>${esc(e.title)}</b> — ${esc(e.end)}</div>`).join('')}</div>` : ''}`;
 }
 
 export function legendHTML(): string {
