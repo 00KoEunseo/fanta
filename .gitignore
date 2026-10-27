@@ -2,3 +2,4 @@ node_modules
 dist
 *.log
 .vite
+scripts/qa/last*.json

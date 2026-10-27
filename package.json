@@ -8,7 +8,9 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "check": "tsc --noEmit",
-    "headless": "tsx scripts/headless.ts"
+    "headless": "tsx scripts/headless.ts",
+    "audit": "tsx scripts/qa/audit.ts",
+    "audit:quick": "tsx scripts/qa/audit.ts --quick"
   },
   "devDependencies": {
     "tsx": "4.19.2",
