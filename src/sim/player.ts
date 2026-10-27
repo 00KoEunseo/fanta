@@ -27,7 +27,7 @@ import { ageOf, dist } from './state';
 import {
   addFacRel, addRel, aliveFactions, approxDist, charLabel, clamp, facRel, isAdult, isHero, leaderOf, rel, settlementsOf,
 } from './helpers';
-import { awaken, createCharacter, duel, fertile, killChar, relocate, setPos, setTravel, startExpedition, tryMarry } from './characters';
+import { awaken, createCharacter, travelCheck, duel, fertile, killChar, relocate, setPos, setTravel, startExpedition, tryMarry } from './characters';
 import { attemptCoup, declareWar, facDist, launchAttack, makePeace } from './factions';
 import { raiseArmy } from './military';
 import { becomeDemonLord } from './events';
@@ -202,12 +202,15 @@ LIFE.push({
   id: 'adventure', cooldown: 20, chance: 0.03,
   cond: (w, c) => isAdult(w, c) && c.act.kind === 'idle' && c.stats.health > 40,
   build: (w, c) => {
-    const sites = w.sites.filter(s => (s.loot > 0 || s.relic) && s.kind !== 'deep' && approxDist(w, c, s) < 50);
+    // 실제로 갈 수 있는 곳만 소문으로 듣는다 (국경에 막힌 곳을 권하지 않는다)
+    const near = w.sites.filter(s => (s.loot > 0 || s.relic) && s.kind !== 'deep' && approxDist(w, c, s) < 50);
+    const sites = w.rngSim.shuffle(near.slice()).slice(0, 4).map(s => ({ s, chk: travelCheck(w, c, s, 'adventure') })).filter(o => o.chk);
     if (!sites.length) return null;
-    const s = w.rngSim.pick(sites);
+    const { s, chk } = w.rngSim.pick(sites);
+    const warn = chk?.strict ? ` 가는 길에 ${chk.strict}의 국경 검문이 깐깐하다고 한다.` : '';
     return {
       eventId: 'adventure', title: '모험의 부름', data: { site: s.id },
-      text: `여관에서 ${s.name}에 대한 소문을 들었다. 보물과 괴물이 기다린다고 한다. (위험도 ${'★'.repeat(s.level)})`,
+      text: `여관에서 ${s.name}에 대한 소문을 들었다. 보물과 괴물이 기다린다고 한다. (위험도 ${'★'.repeat(s.level)})${warn}`,
       choices: [ok('go', '탐험을 떠난다', `${s.name}까지 직접 걸어간다. 도착하면 어떻게 들어갈지 고른다`), ok('stay', '흘려듣는다', '')],
     };
   },
@@ -332,7 +335,8 @@ LIFE.push({
 
 LIFE.push({
   id: 'plague', cooldown: 30, chance: 0.5,
-  cond: (w, c) => isAdult(w, c) && (w.settlements[c.home]?.plague ?? 0) > 0,
+  // 같은 역병을 '역병이 번진 고을'(xh_plague)로 이미 물었다면 다시 묻지 않는다
+  cond: (w, c) => isAdult(w, c) && (w.settlements[c.home]?.plague ?? 0) > 0 && w.t - (w.player?.lastEvents.xh_plague ?? -999) > 24,
   build: (w, c) => ({
     eventId: 'plague', title: '역병', data: {},
     text: `${w.settlements[c.home].name}에 역병이 돌고 있다. 거리마다 신음 소리가 가득하다.`,
@@ -562,7 +566,8 @@ export function playerTick(w: World): void {
       if (prompt) { setPrompt(prompt, ev.id); return; }
     }
     // 혼자인 성인에게는 인연이 찾아온다 (신분이 높을수록 혼담이 잦다)
-    if (c.spouse < 0 && c.act.kind !== 'army' && c.act.kind !== 'party' && c.act.kind !== 'voyage' && isAdult(w, c) && P.flags?.noMarry === undefined && c.race !== 'undead' && c.race !== 'dragon' && c.role !== '노예') {
+    const mourning = P.flags?.mourning !== undefined && w.t - P.flags.mourning < 12;
+    if (!mourning && c.spouse < 0 && c.act.kind !== 'army' && c.act.kind !== 'party' && c.act.kind !== 'voyage' && isAdult(w, c) && P.flags?.noMarry === undefined && c.race !== 'undead' && c.race !== 'dragon' && c.role !== '노예') {
       const high = x.isLeader || x.isGov || (c.house !== undefined && w.houses[c.house]?.head === c.id) || P.flags?.noble !== undefined;
       const hurry = P.flags?.hurryMatch !== undefined && w.t - P.flags.hurryMatch < 24;
       if (rng.chance(hurry ? 0.2 : high ? 0.08 : 0.05)) {
@@ -613,6 +618,8 @@ export function playerTick(w: World): void {
     // 무리와 함께 움직이는 동안에는 그 무리의 일만 일어난다
     const group = c.act.kind === 'party' ? PARTY_EV : c.act.kind === 'army' ? ARMY_EV : c.act.kind === 'travel' ? TRAVEL_EV : null;
     if (group) {
+      // 부모 손에 이끌려 길을 가는 아이에게 길 위의 사건은 일어나지 않는다
+      if (!isAdult(w, c)) return;
       if (!rng.chance(c.act.kind === 'travel' ? 0.06 : 0.09)) return;
       const eligible = group.filter(ev => { const last = P.lastEvents[ev.id]; return (last === undefined || w.t - last >= (ev.cd ?? 12)) && ev.c(x); });
       const ev = eligible.length ? rng.pick(eligible) : null;

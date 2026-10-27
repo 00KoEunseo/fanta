@@ -89,7 +89,8 @@ export function titleOf(w: World, c: Character): string {
   if (c.awakened.includes('sage')) return '현자';
   if (c.awakened.includes('merchant')) return '거상';
   if (c.rank >= 1) return `명망 높은 ${c.role}`;
-  if (ageOf(w, c) < RACES[c.race].adult) return '아이';
+  // 빛에서 난 천사는 어린 시절이 없다
+  if (c.race !== 'angel' && ageOf(w, c) < RACES[c.race].adult) return '아이';
   return c.role;
 }
 

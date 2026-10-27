@@ -8,7 +8,7 @@ import { addNews, charLog } from './news';
 import type { Character, Faction, PlayerChoice, PlayerPrompt, PlayerState, Settlement, World } from './state';
 import { ageOf, dist } from './state';
 import { addRel, approxDist, charLabel, clamp, isAdult, isHero, leaderOf, settlementsOf } from './helpers';
-import { awaken, createCharacter, dragonRaid, duel, killChar, relocate, setPos, setTravel, startExpedition, tryMarry } from './characters';
+import { awaken, createCharacter, dragonRaid, duel, killChar, reachableSite, relocate, setPos, setTravel, startExpedition, tryMarry } from './characters';
 import { attemptCoup, declareWar, launchAttack, launchRaid } from './factions';
 import { becomeDemonLord, spawnDragon } from './events';
 import { betrayDragon, makePatron } from './calamity';
@@ -246,7 +246,10 @@ export function buildPrompt(x: Ctx, ev: LifeEv): PlayerPrompt | null {
   // 등장인물이 이미 세상에 없으면 이 이야기는 일어나지 않는다
   for (const [k, v] of Object.entries(data)) if (k.endsWith('Id') && typeof v === 'number' && v >= 0 && x.w.chars[v] && x.w.chars[v].died >= 0 && k !== 'siteId') return null;
   const jobOk = (o: Opt) => !o.ok.job || o.ok.job === '백수' || o.ok.job === '평민' || (RACE_JOBS[x.c.race] ?? []).includes(o.ok.job);
-  const opts = (typeof ev.o === 'function' ? ev.o(x) : ev.o).filter(o => (!o.show || o.show(x)) && meets(x, o.need) && jobOk(o));
+  // 탐험을 떠나는 선택지는 실제로 갈 수 있는 유적이 있을 때만 보인다
+  let reach: boolean | undefined;
+  const canGo = (o: Opt) => o.ok.fx !== 'adventure' || (reach ??= x.c.act.kind === 'idle' && !!reachableSite(x.w, x.c));
+  const opts = (typeof ev.o === 'function' ? ev.o(x) : ev.o).filter(o => (!o.show || o.show(x)) && meets(x, o.need) && jobOk(o) && canGo(o));
   if (!opts.length) return null;
   optCache.set(ev.id, opts);
   const choices: PlayerChoice[] = opts.map((o, i) => ({

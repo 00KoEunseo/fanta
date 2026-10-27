@@ -19,7 +19,7 @@ import { tpl } from '../data/text';
 import { addNews, charLog } from './news';
 import { fixJosa } from '../data/text';
 import { MOVE_FLY, MOVE_WALK, advance, findPath, moveCost, posOf, rebuildPortalLinks } from './path';
-import type { Character, Pos, Settlement, World } from './state';
+import type { Character, Pos, Settlement, Site, World } from './state';
 import { ageOf, dist } from './state';
 import {
   addRel, approxDist, charLabel, charPower, clamp, isAdult, isHero, leaderOf, rel, settlementsOf, titleOf,
@@ -208,11 +208,18 @@ export function setPos(c: Character, p: Pos): void {
   c.l = p.l; c.x = p.x; c.y = p.y;
 }
 
+/** 지금 실제로 걸어갈 수 있는 가까운 유적 (없으면 null) */
+export function reachableSite(w: World, c: Character): Site | null {
+  const cands = w.sites.filter(s => (s.loot > 0 || s.relic) && s.kind !== 'deep' && approxDist(w, c, s) < 45).sort((a, b) => approxDist(w, c, a) - approxDist(w, c, b));
+  return cands.slice(0, 6).find(s => canTravel(w, c, s, 'adventure')) ?? null;
+}
+
 /** 탐험을 떠난다: 실제로 유적까지 걸어간다. 도착하면 결과가 난다 (탄생 모드는 유적 입구에서 선택) */
 export function startExpedition(w: World, c: Character, siteId?: number): string {
   if (c.act.kind !== 'idle') return '지금은 다른 일로 길 위에 있다.';
   const cands = siteId !== undefined && w.sites[siteId] ? [w.sites[siteId]]
     : w.sites.filter(s => (s.loot > 0 || s.relic) && s.kind !== 'deep' && approxDist(w, c, s) < 45).sort((a, b) => approxDist(w, c, a) - approxDist(w, c, b));
+  lastBlocked = null;
   for (const s of cands.slice(0, 6)) {
     if (setTravel(w, c, s, 'adventure', s.id)) {
       const months = Math.max(1, Math.ceil((c.act.path?.length ?? 4) / 4));
@@ -220,7 +227,9 @@ export function startExpedition(w: World, c: Character, siteId?: number): string
       return `${s.name}을(를) 향해 길을 나섰다. (약 ${months}개월 길)`;
     }
   }
-  return cands.length ? '국경이 막혀 떠나지 못하였다.' : '근처에는 탐험할 만한 곳이 남아 있지 않았다.';
+  // 고르는 사이에 전쟁이 나 국경이 닫혔을 수 있다
+  if (lastBlocked) return `${lastBlocked}의 국경 수비대에 가로막혀 발길을 돌렸다.`;
+  return cands.length ? '짐을 꾸리던 참에 국경이 닫혔다는 소식이 들려왔다. 길은 다음으로 미루었다.' : '근처에는 탐험할 만한 곳이 남아 있지 않았다.';
 }
 
 /** 다른 곳으로 옮겨 간다: 가까우면 바로, 멀면 실제로 길을 걸어간다 (순간이동 금지) */
@@ -237,7 +246,8 @@ export function relocate(w: World, c: Character, dest: Pos): void {
 }
 
 /** 국경을 넘을 수 있는가: 큰 나라, 사이 나쁜 나라, 경계 중인 나라는 쉽게 지나갈 수 없다 */
-function borderBlocked(w: World, c: Character, path: number[]): string | null {
+/** 길목의 국경에 막히는가. roll=false면 확실한 봉쇄(전쟁·적대)만 보고 난수를 쓰지 않는다 */
+function borderBlocked(w: World, c: Character, path: number[], roll = true): string | null {
   const mine = w.factions[c.faction];
   const checked = new Set<number>();
   for (let i = 0; i < path.length; i += 2) {
@@ -252,10 +262,45 @@ function borderBlocked(w: World, c: Character, path: number[]): string | null {
     const rel = mine ? (mine.relations[o] ?? 0) : -10;
     if ((mine && mine.wars[o] !== undefined) || rel < -30) return f.name;
     const strict = (f.settlements.length >= 4 && rel < 10) || f.posture?.[c.faction] === 'guard';
-    if (strict && !w.rngSim.chance(0.1 + c.traits[PRUDENCE] / 500 + c.stats.intellect / 500)) return f.name;
+    if (strict && roll && !w.rngSim.chance(0.1 + c.traits[PRUDENCE] / 500 + c.stats.intellect / 500)) return f.name;
   }
   return null;
 }
+
+/** 길을 나설 수 있는가: 길이 없거나 확실히 막혔으면 null, 아니면 길목의 깐깐한 국경(있다면)을 알려 준다.
+ *  아무것도 바꾸지 않고 난수도 쓰지 않는다. 깐깐한 국경은 실제로 떠날 때 운에 따라 막힐 수 있다 */
+export function travelCheck(w: World, c: Character, dest: Pos, purpose: NonNullable<Character['act']['purpose']>): { strict: string | null } | null {
+  if (w.demonLord === c.id && !c.isPlayer && purpose !== 'return' && purpose !== 'flee') return null;
+  const path = findPath(w, c, dest, { race: c.race, flying: RACES[c.race].flying }, 30000);
+  if (!path) return null;
+  const free = purpose === 'return' || purpose === 'duel' || purpose === 'hunt' || purpose === 'flee' || c.race === 'dragon' || isHero(c) || w.demonLord === c.id;
+  if (free) return { strict: null };
+  if (borderBlocked(w, c, path, false)) return null;
+  return { strict: strictBorder(w, c, path) };
+}
+
+export function canTravel(w: World, c: Character, dest: Pos, purpose: NonNullable<Character['act']['purpose']>): boolean {
+  return !!travelCheck(w, c, dest, purpose);
+}
+
+/** 길목에서 검문이 깐깐한 나라 (확률로 막힐 수 있다) */
+function strictBorder(w: World, c: Character, path: number[]): string | null {
+  const mine = w.factions[c.faction];
+  for (let i = 0; i < path.length; i += 2) {
+    const p = posOf(w, path[i]);
+    const L = w.layers[p.l];
+    const o = L.owner[p.y * L.w + p.x];
+    if (o < 0 || o === c.faction) continue;
+    const f = w.factions[o];
+    if (!f || !f.alive || (mine && mine.treaties.some(t => t.with === o))) continue;
+    const rel = mine ? (mine.relations[o] ?? 0) : -10;
+    if ((f.settlements.length >= 4 && rel < 10) || f.posture?.[c.faction] === 'guard') return f.name;
+  }
+  return null;
+}
+
+/** 마지막으로 길을 막은 나라 (막힌 까닭을 이야기로 풀어 주려고) */
+let lastBlocked: string | null = null;
 
 export function setTravel(w: World, c: Character, dest: Pos, purpose: NonNullable<Character['act']['purpose']>, target = -1): boolean {
   // 마왕은 몸소 던전을 헤매지 않는다. 왕좌를 지킨다
@@ -272,6 +317,7 @@ export function setTravel(w: World, c: Character, dest: Pos, purpose: NonNullabl
         if (cap) { enslaveChar(w, c, cap); return false; }
       }
       charLog(w, c, `${blocked}의 국경 수비대에 가로막혀 발길을 돌렸다.`, 1);
+      lastBlocked = blocked;
       return false;
     }
   }
@@ -300,7 +346,7 @@ export function killChar(w: World, c: Character, cause: string, killer?: Charact
   charLog(w, c, undead ? `망자로 ${age}년을 떠돈 끝에 ${cause}(으)로 영영 스러졌다.` : `${age}세에 ${cause}(으)로 생을 마감하였다.`, 3);
   if (c.spouse >= 0) {
     const sp = w.chars[c.spouse];
-    if (sp && sp.died < 0) { sp.spouse = -1; charLog(w, sp, `배우자 ${c.name}${c.sex === 'M' ? '' : ''}을(를) 잃었다.`, 2); sp.mood -= 20; }
+    if (sp && sp.died < 0) { sp.spouse = -1; charLog(w, sp, `배우자 ${c.name}을(를) 잃었다.`, 3); sp.mood -= 20; }
   }
   // 유산
   const heirs = c.children.map(id => w.chars[id]).filter(k => k && k.died < 0);
@@ -817,7 +863,7 @@ function arrive(w: World, c: Character): void {
   }
 }
 
-export function resolveAdventure(w: World, c: Character, siteId: number, mod: { power?: number; risk?: number; loot?: number } = {}): void {
+export function resolveAdventure(w: World, c: Character, siteId: number, mod: { power?: number; risk?: number; loot?: number; quiet?: boolean } = {}): 'win' | 'fail' | 'dead' {
   const rng = w.rngSim;
   const site = w.sites[siteId];
   const power = charPower(c, w) * (1 + c.traits[PRUDENCE] / 300) * (mod.power ?? 1);
@@ -828,16 +874,19 @@ export function resolveAdventure(w: World, c: Character, siteId: number, mod: { 
     site.loot -= gold;
     c.wealth += gold; c.fame += 4 + site.level * 3;
     c.stats.might = clamp(c.stats.might + 1);
-    charLog(w, c, `${site.name}을(를) 탐험하여 금화 ${Math.round(gold)}닢을 얻었다.`, 2);
+    // 탄생 모드의 선택으로 들어간 경우는 선택 결과가 일대기에 남으므로 여기서는 조용히 적는다
+    charLog(w, c, `${site.name}을(를) 탐험하여 금화 ${Math.round(gold)}닢을 얻었다.`, mod.quiet ? 1 : 2);
     if (site.relic) tryTakeRelic(w, c, site.id);
+    return 'win';
   } else {
     const dmg = rng.int(15, 50) * (mod.risk ?? 1);
     c.stats.health = clamp(c.stats.health - dmg);
     if (c.stats.health <= 0 || rng.chance(0.12 * site.level / 3 * (mod.risk ?? 1))) {
       killChar(w, c, `${site.name} 탐험 중 괴물의 습격`);
-      return;
+      return 'dead';
     }
-    charLog(w, c, `${site.name}에서 괴물에게 쫓겨 간신히 살아 돌아왔다.`, 2);
+    charLog(w, c, `${site.name}에서 괴물에게 쫓겨 간신히 살아 돌아왔다.`, mod.quiet ? 1 : 2);
+    return 'fail';
   }
 }
 

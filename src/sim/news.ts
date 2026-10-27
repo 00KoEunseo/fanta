@@ -7,11 +7,15 @@ export function addNews(
   opts: { pos?: Pos; chars?: number[]; facs?: number[] } = {},
 ): NewsItem {
   text = fixJosa(text);
-  const n: NewsItem = { id: w.nextNewsId++, t: w.t, text, imp, cat, ...opts };
+  // 위치는 좌표만 남긴다 (인물·고을 객체를 통째로 물고 있으면 저장 파일이 수십 MB로 불어난다)
+  const pos = opts.pos ? { l: opts.pos.l, x: opts.pos.x, y: opts.pos.y } : undefined;
+  const n: NewsItem = { id: w.nextNewsId++, t: w.t, text, imp, cat, ...opts, pos };
   w.news.push(n);
   if (w.news.length > 6000) {
-    // 사소한 소식부터 정리
-    const cut = w.news.findIndex(x => x.imp <= 1);
+    // 사소한 소식부터 정리한다. 큰 사건(imp 4 이상)은 역사로 남긴다
+    let cut = w.news.findIndex(x => x.imp <= 1);
+    if (cut < 0) cut = w.news.findIndex(x => x.imp <= 2);
+    if (cut < 0) cut = w.news.findIndex(x => x.imp <= 3);
     w.news.splice(cut >= 0 ? cut : 0, 1);
   }
   const era = w.eras[w.eras.length - 1];
@@ -61,8 +65,10 @@ function pushBio(w: World, c: Character, text: string, imp: number) {
   const last = c.bio[c.bio.length - 1];
   if (last && last.t === w.t && last.text === text) return;
   c.bio.push({ t: w.t, text, imp });
-  if (c.bio.length > 120) {
-    const i = c.bio.findIndex(b => (b.imp ?? 0) <= 2);
+  // '나'의 일대기는 넉넉히 남긴다. 넘치면 계절 문구 같은 사소한 줄부터 지운다
+  if (c.bio.length > (c.isPlayer ? 600 : 120)) {
+    let i = c.bio.findIndex(b => (b.imp ?? 0) <= 1);
+    if (i < 0) i = c.bio.findIndex(b => (b.imp ?? 0) <= 2);
     c.bio.splice(i >= 0 ? i : 0, 1);
   }
 }

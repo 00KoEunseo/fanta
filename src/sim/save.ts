@@ -6,12 +6,21 @@ import { recomputeTerritory } from './settlements';
 import { claimInitial } from './territory';
 import { rebuildPortalLinks } from './path';
 
+/** 세상을 떠난 이는 더 변하지 않는다: 일상 기록을 비우고, 가까웠던 몇 사람과의 관계만 남기고, 수치를 반올림한다 */
+function deadSlim(c: World['chars'][number]): World['chars'][number] {
+  const rel = Object.entries(c.relations).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 6);
+  const stats = { ...c.stats };
+  for (const k of Object.keys(stats) as (keyof typeof stats)[]) stats[k] = Math.round(stats[k]);
+  return { ...c, log: [], relations: Object.fromEntries(rel), stats, wealth: Math.round(c.wealth), fame: Math.round(c.fame) };
+}
+
 export function serialize(w: World): string {
   const plain = {
     ...w,
     rngSim: w.rngSim.s,
     layers: w.layers.map(L => ({ id: L.id, w: L.w, h: L.h, terrain: Array.from(L.terrain), claim: Array.from(L.claim) })),
-    chars: w.chars.map(c => ({ ...c, log: c.died >= 0 ? [] : c.log.slice(-40) })),
+    chars: w.chars.map(c => c.died < 0 ? { ...c, log: c.log.slice(-40) } : deadSlim(c)),
+    news: w.news.map(n => n.pos ? { ...n, pos: { l: n.pos.l, x: n.pos.x, y: n.pos.y } } : n),
     armies: w.armies.filter(a => a.alive),
   };
   // 군대 id 재정렬

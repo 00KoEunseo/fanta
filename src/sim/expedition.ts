@@ -189,9 +189,11 @@ export function expeditionFx(x: Ctx, fx: string): string | undefined | null {
       c.act = { kind: 'idle' };
       if (!site) return '유적은 이미 무너져 있었다.';
       const before = c.wealth;
-      resolveAdventure(w, c, site.id, fx === 'site_bold' ? { power: 1.3, risk: 1.0, loot: 1.3 } : { power: 1.1, risk: 0.45, loot: 0.7 });
+      const res = resolveAdventure(w, c, site.id, fx === 'site_bold' ? { power: 1.3, risk: 1.0, loot: 1.3, quiet: true } : { power: 1.1, risk: 0.45, loot: 0.7, quiet: true });
       if (c.died < 0) { const h = w.settlements[c.home]; if (h && h.alive) relocate(w, c, h); }
-      return c.died >= 0 ? '' : c.wealth > before ? `금화 ${Math.round(c.wealth - before)}닢을 챙겨 돌아왔다.` : '빈손으로 돌아왔다.';
+      if (res === 'dead') return '';
+      if (res === 'fail') return '어둠 속에서 괴물에게 쫓겨 간신히 살아 돌아왔다.';
+      return c.wealth > before ? `금화 ${Math.round(c.wealth - before)}닢을 챙겨 돌아왔다.` : '보물은 이미 누군가 쓸어 간 뒤였다. 빈손으로 돌아왔다.';
     }
     case 'site_leave': {
       delete F.siteGate; delete F.siteGateT;

@@ -13,11 +13,11 @@ const w = createWorld(seed);
 for (let i = 0; i < 12 * 20; i++) tick(w);
 const pc = createPlayer(w, { race, sex, origin, traits: [55, 55, 55, 55, 55, 55, 55, 55, 55, 55] } as any);
 if (!pc) { console.log(JSON.stringify({ seed, race, origin, skipped: true })); (globalThis as any).process.exit(0); }
-const adultAge = RACES[pc.race].adult;
+const adultAge = RACES[pc!.race].adult;
 type P = { t: number; age: number; id: string; text: string; pick: string; result?: string };
 const prompts: P[] = [];
 const spouseDeaths: { t: number; name: string }[] = [];
-let sp = pc.spouse, n = 0;
+let sp = pc!.spouse, n = 0;
 for (let i = 0; i < 12 * 400; i++) {
   tick(w);
   const P = w.player!;
@@ -56,7 +56,7 @@ const out = {
   topEvents: Object.entries(ids).sort((a, b) => b[1] - a[1]).slice(0, 6),
   spouseDeaths: spouseDeaths.length, widowLogged, widowPrompts: ids.ms_widowed ?? 0,
   minorTravel: prompts.filter(p => p.age < adultAge && TRAVELY.test(p.id)).length,
-  impossibleOpt: prompts.filter(p => /떠나지 못하였다/.test(p.result ?? '')).length,
+  impossibleOpt: prompts.filter(p => /떠나지 못하였다|국경이 닫혔다는 소식/.test(p.result ?? '')).length,
   rankSameAsJob: prompts.filter(p => /^cr_rank/.test(p.id) && p.text.includes(`'${role}'`)).length,
   plagueDouble, dupBio,
   firstWordAge: prompts.find(p => p.id === 'c_firstword')?.age ?? null,

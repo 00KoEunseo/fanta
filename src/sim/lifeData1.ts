@@ -10,7 +10,7 @@ const C0 = 0, AMB = 1, GRE = 2, COM = 3, LOY = 4, FAI = 5, CUR = 6, SOC = 7, PRU
 export const o = (l: string, ok: Eff, d = '', s?: [Check, number], no?: Eff): Opt => ({ l, d, ok, s, no });
 
 export const CHILD: LifeEv[] = [
-  { id: 'c_firstword', t: '첫마디', once: true, c: all(kid(0.1, 0.3), notDragon), x: '아기 {n}이(가) 처음으로 말을 하려 한다. 무슨 말이었을까?',
+  { id: 'c_firstword', t: '첫마디', once: true, c: all(x => x.age >= 1 && x.age <= 3, notDragon), x: '아기 {n}이(가) 처음으로 말을 하려 한다. 무슨 말이었을까?',
     o: [o('"엄마"', { r: '온 집안이 기뻐하였다.', ch: 2, mood: 5 }), o('"칼"', { r: '어른들이 놀라 웃었다.', mi: 2, tr: [[C0, 5]] }), o('"왜?"', { r: '그날부터 질문이 끊이지 않았다.', in: 2, tr: [[CUR, 6]] })] },
   { id: 'c_lost', t: '길 잃은 아이', once: true, c: kid(0.25, 0.6), x: '{market}의 인파 속에서 길을 잃었다. 낯선 골목이 무섭다.',
     o: [o('울면서 부모를 부른다', { r: '경비병이 집에 데려다주었다.', mood: -3 }), o('혼자 길을 찾아본다', { ach: 'lostkid', r: '스스로 집을 찾아냈다. 어른들이 혀를 내둘렀다.', tr: [[C0, 6]], in: 2 }, '', ['in', 0.5], { r: '하룻밤을 길에서 보냈다.', hp: -5, tr: [[C0, 3]] }), o('낯선 아이와 함께 찾는다', { r: '평생의 친구를 사귀었다.', ch: 3, tr: [[SOC, 6]] })] },

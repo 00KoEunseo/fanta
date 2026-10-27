@@ -64,11 +64,13 @@ const held = new Map<number, number>();
 for (const a of w.artifacts) if (a.holder >= 0 && a.tangible) held.set(a.holder, (held.get(a.holder) ?? 0) + 1);
 const texts = [...all.map(n => n.text), ...w.chars.flatMap(c => c.bio.map(b => b.text))];
 
-let saveOk = false;
-try { const w2 = deserialize(serialize(w)); tick(w2); saveOk = w2.chars.length >= w.chars.length; } catch { saveOk = false; }
+let saveOk = false, saveKB = 0, saveGzKB = 0;
+const zlibName = 'node:zlib';
+const zlib: any = await import(zlibName);
+try { const js = serialize(w); saveKB = Math.round(js.length / 1024); saveGzKB = Math.round(zlib.gzipSync(js).length * 4 / 3 / 1024); const w2 = deserialize(js); tick(w2); saveOk = w2.chars.length >= w.chars.length; } catch { saveOk = false; }
 
 console.log(JSON.stringify({
-  seed, years: +(span).toFixed(0), deterministic, saveOk, doomAt,
+  seed, years: +(span).toFixed(0), deterministic, saveOk, saveKB, saveGzKB, doomAt,
   perf: { msPerTick: +((performance.now() - t0) / (w.t || 1)).toFixed(1), worst: Math.round(worst) },
   news: { total: all.length, perYear: +(all.length / span).toFixed(1), stored: w.news.length, oldestStoredYear: w.news[0] ? Math.floor(w.news[0].t / 12) : 0, firstYear: all[0] ? Math.floor(all[0].t / 12) : 0,
     catShare: Object.fromEntries(Object.entries(byCat).map(([k, v]) => [k, +(v / all.length).toFixed(3)])),

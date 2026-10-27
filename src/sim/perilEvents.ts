@@ -33,7 +33,7 @@ export const PERIL: LifeEv[] = [
     o: [o('내륙으로 피난한다', { r: '바다 냄새가 나지 않는 곳까지 걸었다.', fx: 'move_inland', unflag: 'peril_abyss' }),
       o('남아서 해안을 지킨다', { r: '작살을 들고 해안에 섰다. 사람들이 당신을 따라 싸웠다.', fame: 15, honor: 10, mi: 2, unflag: 'peril_abyss' }, '', ['mi', 0.45], { r: '파도에 휩쓸렸다가 기적처럼 뭍으로 떠밀려 왔다.', hp: -45, unflag: 'peril_abyss' }),
       o('연맹의 의용군에 지원한다', { r: '', fx: 'volunteer', honor: 5, unflag: 'peril_abyss' })] },
-  { id: 'xh_plague', t: '역병이 번진 고을', cd: 24, c: all(adult, fresh('plague')),
+  { id: 'xh_plague', t: '역병이 번진 고을', cd: 24, c: all(adult, fresh('plague'), x => x.w.t - (x.P.lastEvents.plague ?? -999) > 24),
     x: x => `${perilSet(x)}에 역병이 번졌다. 문마다 붉은 표식이 칠해지고, 수레가 밤마다 주검을 실어 나른다.`,
     o: [o('병자를 돌본다', { r: '수많은 밤을 병자들 곁에서 보냈다.', honor: 15, fame: 6, unflag: 'peril_plague' }, '', ['co', 0.55], { r: '당신도 열병에 쓰러졌다.', hp: -35, unflag: 'peril_plague' }),
       o('문을 걸어 잠근다', { r: '창틈으로 들어오는 바람조차 두려웠다.', mood: -8, unflag: 'peril_plague' }),

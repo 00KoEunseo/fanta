@@ -38,7 +38,7 @@ export function watchMilestones(w: World): void {
   // 내가 막 골라서 바뀐 소속은 큰 변화가 아니다
   const chose = (P.flags.lastResolve ?? -99) >= w.t - 1;
   if (prev.faction !== now.faction && now.faction >= 0 && !chose && !perilRecent('fallen') && !perilRecent('fall')) { mark('faction'); P.flags.msOldFaction = prev.faction; }
-  if (prev.spouse >= 0 && now.spouse < 0 && w.chars[prev.spouse]?.died >= 0) { mark('widowed'); P.flags.msSpouse = prev.spouse; }
+  if (prev.spouse >= 0 && now.spouse < 0 && w.chars[prev.spouse]?.died >= 0) { mark('widowed'); P.flags.msSpouse = prev.spouse; P.flags.mourning = w.t; }
   if (now.leader >= 0 && prev.leader < 0) mark('crowned');
   else if (now.gov >= 0 && prev.gov !== now.gov) { mark('lord'); P.flags.msSeat = now.gov; }
   if (now.head >= 0 && prev.head !== now.head) mark('head');
@@ -57,7 +57,8 @@ export const MILESTONES: LifeEv[] = [
       o('겉으로만 따른다', { r: '고개는 숙였지만 마음까지 내주지는 않았다.', tr: [[4, -5]], unflag: clear('faction'), seed: ['old_loyalty', '{fo}에 대한 옛 충성'] }),
       { ...o('옛 나라의 땅으로 떠난다', { r: '', fx: 'ms_go_old', unflag: clear('faction') }), show: (x: Ctx) => !!x.w.factions[x.P.flags?.msOldFaction ?? -1]?.alive }] },
   { id: 'ms_widowed', t: '빈자리', cd: 12, c: all(adult, fresh('widowed')),
-    data: x => ({ wsId: x.P.flags?.msSpouse ?? -1 }),
+    // 떠난 이의 이름이 걸린 이야기라 'Id' 키를 쓰지 않는다 (죽은 인물 이야기는 건너뛰는 규칙에 걸린다)
+    data: x => ({ ws: x.P.flags?.msSpouse ?? -1 }),
     x: x => `${x.w.chars[x.P.flags?.msSpouse ?? -1]?.name ?? '배우자'}이(가) 세상을 떠났다. 함께 쓰던 잔 하나가 식탁 위에 그대로 놓여 있다.`,
     o: [o('성대한 장례를 치른다', { r: '마을 사람들이 모두 와서 고인을 기렸다.', wealth: -30, honor: 6, mood: -10, unflag: clear('widowed') }),
       o('슬픔을 일로 잊는다', { r: '밤낮없이 일에 매달렸다.', mood: -15, mi: 1, in: 1, unflag: clear('widowed') }),
