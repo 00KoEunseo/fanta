@@ -4,12 +4,31 @@ import { FX_HOOKS, adult, all } from './life';
 import { o } from './lifeData1';
 import { charLabel } from './helpers';
 import { expeditionFx } from './expedition';
+import { badWeather, bandits, inn, road } from './scene';
 
 // ───────────── 부름 (매달 가장 먼저 확인한다)
 
 const inviteParty = (x: Ctx) => { const p = x.w.parties[x.P.flags?.partyInvite ?? -1]; return !!p && !p.done && x.c.act.kind === 'idle'; };
 const inviteArmy = (x: Ctx) => { const a = x.w.armies[x.P.flags?.armyInvite ?? -1]; return !!a && a.alive && x.c.act.kind === 'idle'; };
 const atGate = (x: Ctx) => x.P.flags?.siteGate !== undefined && x.c.act.kind === 'travel';
+
+/** 유적 입구의 풍경: 어떤 곳인지, 얼마나 위험한지, 누가 먼저 다녀갔는지, 몇 번째 찾아왔는지에 따라 다르다 */
+function gateScene(x: Ctx): string {
+  const s = x.w.sites[x.P.flags!.siteGate!];
+  if (!s) return '마침내 유적의 입구에 다다랐다.';
+  const visits = (x.P.flags![`visit${s.id}`] = (x.P.flags![`visit${s.id}`] ?? 0) + 1);
+  const k = x.w.t + s.id;
+  const look: Record<string, string[]> = {
+    ruin: ['무너진 기둥 사이로 검은 입구가 입을 벌리고 있다.', '덩굴에 반쯤 덮인 돌문이 보인다. 문틈으로 서늘한 바람이 새어 나온다.', '허물어진 성벽 아래, 지하로 내려가는 계단이 보인다.'],
+    dungeon: ['깊은 굴의 입구에서 무언가 썩는 냄새가 올라온다.', '바위틈으로 난 좁은 입구 너머에서 물방울 떨어지는 소리가 울린다.', '입구 바닥에 긁힌 발톱 자국이 어지럽다.'],
+    shrine: ['이끼 낀 사당의 문이 소리 없이 열려 있다.', '부서진 신상의 눈이 입구를 내려다본다.', '향 냄새가 아직도 희미하게 남아 있다. 누군가 최근에 다녀갔다.'],
+  };
+  const arr = look[s.kind] ?? look.ruin;
+  const first = visits <= 1 ? `마침내 ${s.name}에 다다랐다. ${arr[k % arr.length]}` : `${visits}번째로 ${s.name} 앞에 섰다. ${visits >= 3 ? '익숙한 길이지만 방심은 금물이다.' : '지난번의 기억이 아직 생생하다.'}`;
+  const empty = s.loot < 20 && !s.relic ? ' 입구에 남은 발자국이 많다. 누군가 먼저 다녀간 모양이다.' : '';
+  const danger = s.level >= 4 ? ' 이름난 모험가들도 돌아오지 못한 곳이다.' : '';
+  return first + empty + danger;
+}
 
 export const INVITES: LifeEv[] = [
   { id: 'xp_party_invite', t: '토벌대의 부름', cd: 0, c: inviteParty,
@@ -24,7 +43,7 @@ export const INVITES: LifeEv[] = [
     o: [o('창을 들고 대열에 선다', { r: '북소리에 맞추어 발을 내디뎠다.', fx: 'join_army', honor: 3 }, '군대와 함께 움직인다. 승리하면 공을, 패하면 목숨을 건다'),
       o('뒷돈을 쥐여 주고 빠진다', { r: '징집관이 못 본 척 고개를 돌렸다.', fx: 'decline_army', wealth: -25, honor: -8 }), o('병을 핑계로 몸을 뺀다', { r: '앓는 소리를 내며 누웠다.', fx: 'decline_army', honor: -4 })] },
   { id: 'xp_site_gate', t: '유적 입구', cd: 0, c: atGate,
-    x: x => `마침내 ${x.w.sites[x.P.flags!.siteGate!]?.name ?? '유적'}의 입구에 다다랐다. 안쪽에서 차가운 바람이 불어 나온다.`,
+    x: x => gateScene(x),
     o: [o('정면으로 들이친다', { r: '횃불을 높이 들고 성큼 들어섰다.', fx: 'site_bold' }, '힘으로 밀어붙인다. 보물은 더 많지만 다칠 수 있다'),
       o('몰래 숨어든다', { r: '그림자를 따라 조용히 스며들었다.', fx: 'site_sneak' }, '덜 위험하지만 챙기는 것도 적다'),
       o('입구만 살피고 돌아선다', { r: '', fx: 'site_leave' })] },
@@ -78,16 +97,25 @@ export const ARMY_EV: LifeEv[] = [
 ];
 
 const traveling = (x: Ctx) => x.c.act.kind === 'travel' && x.P.flags?.siteGate === undefined;
+// 길 위의 일들: 어느 땅을 걷는지, 어느 계절인지, 세상이 어떤 형편인지에 따라 모습이 달라진다
+const COMPANION = ['같은 방향으로 가는 나그네가 말을 걸어왔다.', '짐을 잔뜩 진 행상이 길동무를 청한다.', '순례길에 오른 노인이 걸음을 맞추어 온다.', '떠돌이 악사가 노래 한 자락을 들려주며 따라붙었다.'];
+const atWarNear = (x: Ctx) => !!x.f && Object.keys(x.f.wars).length > 0;
+const daySeed = (x: Ctx) => x.w.t + x.c.id;
 export const TRAVEL_EV: LifeEv[] = [
-  { id: 'xt_companion', t: '길동무', cd: 12, c: traveling, x: '같은 방향으로 가는 나그네가 말을 걸어왔다.',
+  { id: 'xt_companion', t: '길동무', cd: 12, c: traveling, x: x => COMPANION[(x.w.t + x.c.id) % COMPANION.length],
     o: [o('함께 걷는다', { r: '길이 한결 짧게 느껴졌다.', mood: 6, ch: 1 }), o('혼자 가겠다고 한다', { r: '나그네는 어깨를 으쓱하고 앞서 갔다.' })] },
-  { id: 'xt_bandits', t: '산적', cd: 18, c: all(adult, traveling), x: '숲길에서 복면을 쓴 자들이 길을 막아섰다. "가진 걸 내놓고 가라."',
-    o: [o('맞서 싸운다', { r: '산적들을 쫓아 버렸다.', fame: 5, mi: 1 }, '', ['mi', 0.5], { r: '흠씬 두들겨 맞고 털렸다.', hp: -20, wealth: -20 }),
-      o('돈주머니를 던진다', { r: '목숨은 건졌다.', wealth: -25 }), o('달아난다', { r: '덤불을 헤치고 도망쳤다.', hp: -5 }, '', ['luck', 0.6], { r: '붙잡혀 털렸다.', wealth: -30 })] },
-  { id: 'xt_inn', t: '길가의 여관', cd: 10, c: traveling, x: '해가 진다. 길가에 낡은 여관 하나가 불을 밝히고 있다.',
-    o: [o('하룻밤 묵는다', { r: '따뜻한 국과 마른 침상. 몸이 풀렸다.', wealth: -5, hp: 8 }), o('노숙한다', { r: '별을 이불 삼아 잠들었다.', hp: -2 })] },
-  { id: 'xt_fork', t: '갈림길', cd: 12, c: traveling, x: '지도에 없는 샛길이 보인다. 지름길일 것 같기도, 아닐 것 같기도 하다.',
+  { id: 'xt_bandits', t: '길을 막는 자들', cd: 18, c: all(adult, traveling), x: x => `${road(x.w, x.c)}에서 ${bandits(x.w, x.c)} 길을 막아섰다. "가진 걸 내놓고 가라."`,
+    o: [o('맞서 싸운다', { r: '그들을 쫓아 버렸다.', fame: 5, mi: 1 }, '', ['mi', 0.5], { r: '흠씬 두들겨 맞고 털렸다.', hp: -20, wealth: -20 }),
+      o('돈주머니를 던진다', { r: '목숨은 건졌다.', wealth: -25 }), o('달아난다', { r: '정신없이 도망쳤다.', hp: -5 }, '', ['luck', 0.6], { r: '붙잡혀 털렸다.', wealth: -30 })] },
+  { id: 'xt_inn', t: '쉬어 갈 곳', cd: 18, c: traveling, x: x => `${['해가 진다.', '다리가 무거워졌다.', '길 위에서 사흘째다.'][daySeed(x) % 3]} ${inn(x.w, x.c, daySeed(x))}.`,
+    o: [o('하룻밤 묵는다', { r: '따뜻한 국과 마른 잠자리. 몸이 풀렸다.', wealth: -5, hp: 8 }), o('노숙한다', { r: '별을 이불 삼아 잠들었다.', hp: -2 })] },
+  { id: 'xt_fork', t: '갈림길', cd: 12, c: traveling, x: x => `${road(x.w, x.c)} 옆으로 지도에 없는 샛길이 보인다. 지름길일 것 같기도, 아닐 것 같기도 하다.`,
     o: [o('샛길로 간다', { r: '정말 지름길이었다!', fx: 'trip_shortcut' }, '', ['in', 0.5], { r: '한참을 헤매다 원래 길로 돌아왔다.', hp: -4 }), o('큰길로 간다', { r: '느리지만 확실하였다.' })] },
+  { id: 'xt_weather', t: '궂은 날씨', cd: 18, c: all(traveling, x => !!badWeather(x.w, x.c)), x: x => badWeather(x.w, x.c)!,
+    o: [o('발길을 멈추고 기다린다', { r: '하루를 꼬박 기다려서야 다시 길을 나섰다.', mood: -2 }), o('그대로 밀고 나간다', { r: '이를 악물고 걸었다.', co: 1 }, '', ['co', 0.5], { r: '몸이 꽁꽁 얼고 지쳐 쓰러질 뻔하였다.', hp: -12 })] },
+  { id: 'xt_refugees', t: '피난 행렬', cd: 24, c: all(adult, traveling, atWarNear), x: x => `${road(x.w, x.c)}이(가) 보따리를 이고 진 피난민들로 메워져 있다. 전쟁이 이쪽으로 번지고 있다는 소문이다.`,
+    o: [o('먹을 것을 나누어 준다', { r: '아이들의 손에 빵을 쥐여 주었다.', wealth: -10, honor: 6 }), o('소식을 묻는다', { r: '어느 마을이 불탔고 어느 길이 막혔는지 알게 되었다.', in: 1 }),
+      o('길을 비키라고 다그친다', { r: '원망 섞인 눈길이 등에 꽂혔다.', honor: -4 })] },
 ];
 
 // ───────────── 연맹의 부름 (평소에 뜬다)

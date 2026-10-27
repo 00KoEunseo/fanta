@@ -240,6 +240,17 @@ export function effPreview(x: Ctx, e: Eff): string {
   return out.join(' · ');
 }
 
+/** 크게 다쳤을 때: 처음에는 쓰러졌다 일어나고, 아물기 전(2년 안)에 또 크게 다치면 무너진다.
+ *  살아남았으면 그 사연을, 죽었으면 빈 문자열을 돌려준다 */
+export function nearDeath(w: World, c: Character, P: PlayerState, cause: string): string {
+  P.flags ??= {};
+  const t = P.flags.wounded;
+  if (t !== undefined && w.t - t <= 24) { killChar(w, c, cause); return ''; }
+  c.stats.health = 8;
+  P.flags.wounded = w.t;
+  return '피를 쏟으며 쓰러졌다. 목숨은 붙어 있지만, 한동안 누워 지내야 한다.';
+}
+
 export function buildPrompt(x: Ctx, ev: LifeEv): PlayerPrompt | null {
   const data = ev.data ? ev.data(x) : {};
   if (data === null) return null;
@@ -300,7 +311,10 @@ export function applyEff(x: Ctx, e: Eff, data: PlayerPrompt['data']): string {
   let text = [fill(x, e.r, data), extra].filter(Boolean).join(' ');
   text = fixJosa(text);
   if (e.news) addNews(w, `${c.name}: ${text}`, e.news, 'player', { pos: c, chars: [c.id] });
-  if (c.stats.health <= 0 && c.died < 0) killChar(w, c, '무리한 끝에 입은 상처');
+  if (c.stats.health <= 0 && c.died < 0) {
+    const nd = nearDeath(w, c, x.P, '무리한 끝에 입은 상처');
+    if (nd) text = `${text} ${nd}`;
+  }
   return text;
 }
 

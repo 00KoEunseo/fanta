@@ -1208,7 +1208,8 @@ const RESTOCK = ['{s}에 괴물들이 다시 둥지를 틀었다. 어둠 속에 
 export function restockSites(w: World): void {
   const rng = w.rngSim;
   for (const s of w.sites) {
-    if (s.kind === 'deep' || s.loot > 0 || !rng.chance(1 / 120)) continue;
+    // 털린 유적은 오래 비어 있다 (평균 30년). 그사이 새 괴물과 보물이 깃든다
+    if (s.kind === 'deep' || s.loot > 0 || !rng.chance(1 / 360)) continue;
     s.loot = rng.int(40, 120) * s.level;
     if (rng.chance(0.25)) addNews(w, rng.pick(RESTOCK).replace('{s}', s.name), 1, 'nature', { pos: s });
   }

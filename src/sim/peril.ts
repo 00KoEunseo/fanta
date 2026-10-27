@@ -9,7 +9,7 @@ import { clamp } from './helpers';
 import { killChar, relocate } from './characters';
 import type { Ctx } from './life';
 
-export type PerilKind = 'dragon' | 'quake' | 'fallen' | 'abyss' | 'beast' | 'plague' | 'dlnews' | 'fall';
+export type PerilKind = 'dragon' | 'quake' | 'fallen' | 'abyss' | 'beast' | 'plague' | 'dlnews' | 'fall' | 'dlarmy';
 
 /** 그 고을에 지금 머무는 이들 */
 function residents(w: World, s: Settlement): Character[] {

@@ -54,6 +54,7 @@ const out = {
   travelShare: +(prompts.filter(p => TRAVELY.test(p.id)).length / Math.max(1, prompts.length)).toFixed(2),
   maxSameText: [maxSame[1], maxSame[0].slice(0, 60)],
   topEvents: Object.entries(ids).sort((a, b) => b[1] - a[1]).slice(0, 6),
+  events: ids, wounded: c.bio.filter(b => /피를 쏟으며 쓰러졌다/.test(b.text)).length, isRuler: w.factions.some(f => f.rulers?.some(r => r.id === c.id)),
   spouseDeaths: spouseDeaths.length, widowLogged, widowPrompts: ids.ms_widowed ?? 0,
   minorTravel: prompts.filter(p => p.age < adultAge && TRAVELY.test(p.id)).length,
   impossibleOpt: prompts.filter(p => /떠나지 못하였다|국경이 닫혔다는 소식/.test(p.result ?? '')).length,

@@ -264,6 +264,8 @@ export interface PlayerState {
   dead: boolean;
   /** 구직 실패 횟수 */
   jobFails?: number;
+  /** 이벤트별로 겪은 횟수 (자주 겪은 일은 덜 찾아온다) */
+  seen?: Record<string, number>;
   /** 지난달의 처지 (큰 변화를 알아채기 위해) */
   watch?: Record<string, number>;
   /** 인연의 씨앗: 지난 선택이 훗날 돌아온다 */

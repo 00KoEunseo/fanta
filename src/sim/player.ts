@@ -1,6 +1,6 @@
 import { RACES, type RaceKey } from '../data/races';
 import { makeName } from '../data/names';
-import { ADVENTURER_TIRED, JOB_SEARCH, buildPrompt, makeCtx, resolveLife, type LifeEv } from './life';
+import { ADVENTURER_TIRED, JOB_SEARCH, buildPrompt, makeCtx, nearDeath, resolveLife, type LifeEv } from './life';
 import { CHILD, RACIAL, ROMANCE, TRAIT } from './lifeData1';
 import { JOBS } from './lifeData2';
 import { DRAGON, GUARDIAN, POWER } from './lifeData3';
@@ -13,6 +13,8 @@ import { PERIL } from './perilEvents';
 import { MILESTONES, watchMilestones } from './milestones';
 import { JOB_OFFER } from './lifeData8';
 import { ROYAL, royalBirths } from './lifeData9';
+import { ARCS, CARE, DL_PERIL, RULE } from './lifeData10';
+import { markPeril } from './peril';
 /** 씨앗에서 자라는 뒷이야기 (평소 풀에는 넣지 않는다) */
 const STORY_FOLLOW = new Set(['st_thief_spared', 'st_thief_jailed', 'st_thief_hired', 'st_loan_back', 'st_loan_gift', 'st_stranger_helped', 'st_stranger_robbed', 'st_rival_lost', 'st_rival_beaten', 'st_rival_feud', 'st_mentor_end', 'st_oath_test', 'st_map_found', 'st_dragon_vengeance', 'st_resistance']);
 import { spawnDragon } from './events';
@@ -189,7 +191,7 @@ LIFE.push({
         return '적진을 돌파하여 큰 공을 세웠다! 모두가 그의 이름을 외쳤다.';
       }
       c.stats.health = clamp(c.stats.health - w.rngSim.int(25, 60));
-      if (c.stats.health <= 5) { killChar(w, c, '전장에서 입은 상처'); return '치명상을 입었다…'; }
+      if (c.stats.health <= 5) { const nd = nearDeath(w, c, w.player!, '전장에서 입은 상처'); return nd ? `처참한 패배였다. ${nd}` : '치명상을 입었다…'; }
       return '처참한 패배였다. 간신히 목숨만 건졌다.';
     }
     if (ch === 'support') { c.honor += 5; c.wealth = Math.max(0, c.wealth - 10); return '보급 부대에서 묵묵히 일하였다.'; }
@@ -215,6 +217,7 @@ LIFE.push({
     };
   },
   resolve: (w, c, ch, d) => {
+    P0(w).advNo = ch === 'go' ? 0 : (P0(w).advNo ?? 0) + 1;
     if (ch !== 'go') return '모험은 다른 이들의 몫이라 여겼다.';
     return startExpedition(w, c, +d.site);
   },
@@ -297,7 +300,13 @@ LIFE.push({
     if (e) choices.unshift(ok('war', `${e.name}에 전쟁을 선포한다`, `관계 ${Math.round(facRel(f, e.id))}, 군사력 ${Math.round(f.military)} 대 ${Math.round(e.military)}`));
     const peaceWith = Object.keys(f.wars).map(Number)[0];
     if (peaceWith !== undefined) choices.push(ok('peace', `${w.factions[peaceWith].name}과(와) 강화한다`, '전쟁 종료 시도'));
-    return { eventId: 'ruler_policy', title: '어전 회의', data: { e: e ? e.id : -1, peace: peaceWith ?? -1 }, text: `${f.name}의 신하들이 ${c.name}의 결정을 기다린다.`, choices };
+    // 나라의 형편이 회의의 공기를 정한다
+    const k = w.t + c.id;
+    const mood = peaceWith !== undefined ? [`전선에서 올라온 보고서가 탁자 위에 쌓여 있다. ${w.factions[peaceWith].name}과(와)의 싸움은 끝이 보이지 않는다.`, `상복을 입은 귀족 몇이 회의에 들어왔다. 전쟁은 모든 집에서 누군가를 데려갔다.`][k % 2]
+      : f.flags.includes('food_crisis') ? '곡창 관리가 굶주린 고을의 이름을 하나씩 읽어 내려간다.'
+      : e && facRel(f, e.id) < -40 ? `${e.name}의 국경 수비대가 늘었다는 보고가 들어왔다. 장군들이 칼자루를 만지작거린다.`
+      : ['태평한 해였다. 신하들은 새 일을 벌이자고 저마다 목소리를 높인다.', '봄 회의가 열렸다. 지방에서 올라온 청원서가 산더미다.', '사냥에서 돌아오자 대신들이 기다리고 있었다.'][k % 3];
+    return { eventId: 'ruler_policy', title: '어전 회의', data: { e: e ? e.id : -1, peace: peaceWith ?? -1 }, text: `${mood} ${f.name}의 신하들이 ${c.name}의 결정을 기다린다.`, choices };
   },
   resolve: (w, c, ch, d) => {
     const f = w.factions[c.faction];
@@ -540,6 +549,8 @@ LIFE.push({
 
 // ───────────── 진행
 
+const P0 = (w: World): Record<string, number> => (w.player!.flags ??= {});
+
 export function playerTick(w: World): void {
   // 처지가 크게 바뀌었는지는 선택지가 떠 있어도 매달 살핀다
   watchMilestones(w);
@@ -554,8 +565,12 @@ export function playerTick(w: World): void {
     prompt.text = fixJosa(prompt.text);
     for (const ch of prompt.choices) { ch.label = fixJosa(ch.label); ch.desc = fixJosa(ch.desc); }
     P.lastEvents[id] = w.t;
+    P.seen ??= {};
+    P.seen[id] = (P.seen[id] ?? 0) + 1;
     P.prompt = prompt;
   };
+  // 자주 겪은 일일수록 다시 찾아오기까지 오래 걸린다 (같은 장면이 한 생애에 수십 번 되풀이되지 않도록)
+  const cdFor = (id: string, base: number) => base * (1 + 0.5 * Math.min(6, P.seen?.[id] ?? 0));
   const isDragon = c.race === 'dragon';
   // 무리에서 부르는 소리 (토벌대, 출정, 유적 입구): 오면 바로 묻는다
   {
@@ -588,8 +603,23 @@ export function playerTick(w: World): void {
       const prompt = buildPrompt(x, ev);
       if (prompt) { setPrompt(prompt, ev.id); return; }
     }
+    // 쓰러진 몸, 마지막 말
+    for (const ev of CARE) {
+      const last = P.lastEvents[ev.id];
+      if ((ev.once && last !== undefined) || (last !== undefined && w.t - last < (ev.cd ?? 12))) continue;
+      if (!ev.c(x)) continue;
+      const prompt = buildPrompt(x, ev);
+      if (prompt) { setPrompt(prompt, ev.id); return; }
+    }
+    // 마왕군이 내 고을로 오고 있다
+    if (w.demonLord >= 0 && x.home && P.flags?.peril_dlarmy === undefined) {
+      const dlf = w.chars[w.demonLord]?.faction ?? -1;
+      const home = x.home;
+      if (dlf >= 0 && c.faction !== dlf && w.armies.some(a => a.alive && a.target === home.id && (a.goal === 'conquer' || a.goal === 'raid')
+        && (a.faction === dlf || w.factions[a.faction]?.flags.includes('dlvassal')) && a.l === home.l && dist(a, home) < 25)) markPeril(w, 'dlarmy', home);
+    }
     // 세상의 재앙에 휘말렸다
-    for (const ev of PERIL) {
+    for (const ev of [...PERIL, ...DL_PERIL]) {
       const last = P.lastEvents[ev.id];
       if (!fitsLife(w, c, ev.id)) continue;
       if (last !== undefined && w.t - last < (ev.cd ?? 6)) continue;
@@ -621,7 +651,7 @@ export function playerTick(w: World): void {
       // 부모 손에 이끌려 길을 가는 아이에게 길 위의 사건은 일어나지 않는다
       if (!isAdult(w, c)) return;
       if (!rng.chance(c.act.kind === 'travel' ? 0.06 : 0.09)) return;
-      const eligible = group.filter(ev => { const last = P.lastEvents[ev.id]; return (last === undefined || w.t - last >= (ev.cd ?? 12)) && ev.c(x); });
+      const eligible = group.filter(ev => { const last = P.lastEvents[ev.id]; return (last === undefined || w.t - last >= cdFor(ev.id, ev.cd ?? 12)) && ev.c(x); });
       const ev = eligible.length ? rng.pick(eligible) : null;
       const prompt = ev && buildPrompt(x, ev);
       if (prompt && ev) setPrompt(prompt, ev.id);
@@ -643,9 +673,11 @@ export function playerTick(w: World): void {
   for (const ev of isDragon ? [] : isGuardian ? LIFE.filter(e => GUARDIAN_LIFE.has(e.id)) : c.role === '노예' ? LIFE.filter(e => SLAVE_LIFE.has(e.id)) : LIFE) {
     const last = P.lastEvents[ev.id];
     if (ev.once && last !== undefined) continue;
-    if (last !== undefined && w.t - last < ev.cooldown) continue;
-    if (!ev.cond(w, c)) continue;
-    if (!rng.chance(Math.min(1, ev.chance * 1.5))) continue;
+    if (last !== undefined && w.t - last < cdFor(ev.id, ev.cooldown)) continue;
+    if (!fitsLife(w, c, ev.id) || !ev.cond(w, c)) continue;
+    // 모험의 부름을 거듭 흘려들었다면 소문도 덜 들린다
+    const shy = ev.id === 'adventure' ? Math.pow(0.6, P.flags?.advNo ?? 0) : 1;
+    if (!rng.chance(Math.min(1, ev.chance * 1.5 * shy))) continue;
     const prompt = ev.build(w, c);
     if (!prompt) continue;
     setPrompt(prompt, ev.id);
@@ -657,7 +689,7 @@ export function playerTick(w: World): void {
   for (const [ev, cd, chance] of (isDragon || isGuardian ? [] : [[JOB_OFFER[0], 18, 0.3], [JOB_SEARCH, 4, 0.5], [ADVENTURER_TIRED, 36, 0.03]]) as [LifeEv, number, number][]) {
     const last = P.lastEvents[ev.id];
     if (last !== undefined && w.t - last < cd) continue;
-    if (!ev.c(x) || !rng.chance(chance)) continue;
+    if (!fitsLife(w, c, ev.id) || !ev.c(x) || !rng.chance(chance)) continue;
     const prompt = buildPrompt(x, ev);
     if (prompt) { setPrompt(prompt, ev.id); return; }
   }
@@ -670,7 +702,7 @@ export function playerTick(w: World): void {
     const last = P.lastEvents[ev.id];
     if (!fitsLife(w, c, ev.id)) return false;
     if (ev.once && last !== undefined) return false;
-    if (last !== undefined && w.t - last < (ev.cd ?? 48)) return false;
+    if (last !== undefined && w.t - last < cdFor(ev.id, ev.cd ?? 48)) return false;
     return ev.c(x);
   });
   for (let i = 0; i < 4 && eligible.length; i++) {
@@ -682,7 +714,7 @@ export function playerTick(w: World): void {
 }
 
 const POOL: LifeEv[] = [...CHILD, ...ROMANCE, ...TRAIT, ...RACIAL, ...JOBS, ...POWER, ...GUARDIAN, ...DRAGON,
-  ...WORKS_EV, ...RENOWN, ...ARTFATE, ...GOVPATH, ...NEWJOBS, ...GUARDIAN2, ...ECON, ...SLAVE, ...TOWER, ...SEA_START, ...ALLIANCE_EV, ...STORY.filter(e => !STORY_FOLLOW.has(e.id)), ...CAREER, ...HOUSE, JOB_OFFER[1], ...ROYAL];
+  ...WORKS_EV, ...RENOWN, ...ARTFATE, ...GOVPATH, ...NEWJOBS, ...GUARDIAN2, ...ECON, ...SLAVE, ...TOWER, ...SEA_START, ...ALLIANCE_EV, ...STORY.filter(e => !STORY_FOLLOW.has(e.id)), ...CAREER, ...HOUSE, JOB_OFFER[1], ...ROYAL, ...RULE, ...ARCS];
 const POOL_HUMAN: LifeEv[] = POOL.filter(e => !DRAGON.includes(e));
 /** 돈벌이·출세와 무관한 성역의 수호자에게 어울리는 것들 */
 const MONEY_TRAITS = new Set(['t_greedy_purse', 't_cruel_chance', 't_prudent_invest', 't_reckless_bet', 't_traitor_whisper', 't_social_party', 't_loyal_test']);
@@ -695,7 +727,8 @@ const SLAVE_LIFE = new Set(['raid_defense', 'parent_death', 'child_born', 'plagu
 /** 언데드는 사랑과 출산을 겪지 않는다 */
 const UNDEAD_SKIP = new Set([...ROMANCE.map(e => e.id), 'c_teen_love', 'c_firstword', 'c_sick', 'hs_match', 'rc_elder_legacy', 'old_age', 'plague']);
 /** 신분과 처지에 맞지 않는 이벤트 */
-const LEADER_SKIP = new Set(['j_fired', 'e_capital', 'e_riot', 'e_boom', 'e_crowded', 't_traitor_whisper', 'j_war_promote', 'j_idle_nap', 'j_idle_odd', 'j_idle_scam', 'j_idle_parent', 'st_stranger_robbed', 'st_stranger_helped', 'w_장인', 'gp_trial', 'gp_offer']);
+// 군주는 던전을 헤매거나 일자리를 구하러 다니지 않는다
+const LEADER_SKIP = new Set(['adventure', 'job_search', 'jo_offer', 'j_fired', 'e_capital', 'e_riot', 'e_boom', 'e_crowded', 't_traitor_whisper', 'j_war_promote', 'j_idle_nap', 'j_idle_odd', 'j_idle_scam', 'j_idle_parent', 'st_stranger_robbed', 'st_stranger_helped', 'w_장인', 'gp_trial', 'gp_offer']);
 const GOV_SKIP = new Set(['e_riot', 'e_capital', 'j_fired', 'j_war_promote', 'st_stranger_helped', 'gp_offer']);
 const ORPHAN_SKIP = new Set(['c_firstword', 'c_lost', 'c_teen_rebel', 'j_idle_parent']);
 const SLAVE_SKIP = new Set(['rc_elf_century', 'rc_orc_waaagh', 'rc_dwarf_forge', 'rc_human_ambition', 'rc_darkelf_intrigue', 't_lonely_hermit', 't_kind_beggar', 't_faith_vision',
@@ -711,7 +744,7 @@ function fitsLife(w: World, c: Character, id: string): boolean {
   if (RACES[c.race].needs[0] === 0 && UNDEAD_SKIP.has(id)) return false;
   return true;
 }
-const POOL_MAP = new Map<string, LifeEv>([...POOL, ...SEA, ...STORY, ...PERIL, ...MILESTONES, ...JOB_OFFER, ...INVITES, ...PARTY_EV, ...ARMY_EV, ...TRAVEL_EV, JOB_SEARCH, ADVENTURER_TIRED].map(e => [e.id, e]));
+const POOL_MAP = new Map<string, LifeEv>([...POOL, ...SEA, ...STORY, ...PERIL, ...MILESTONES, ...JOB_OFFER, ...INVITES, ...PARTY_EV, ...ARMY_EV, ...TRAVEL_EV, ...CARE, ...DL_PERIL, JOB_SEARCH, ADVENTURER_TIRED].map(e => [e.id, e]));
 export const LIFE_EVENT_COUNT = () => POOL.length + LIFE.length + 2;
 
 export function resolvePlayer(w: World, choiceId: string): string {
@@ -764,7 +797,9 @@ export function continueAsHeir(w: World): boolean {
   const c = w.chars[P.charId];
   const kids = c.children.map(id => w.chars[id]).filter(k => k && k.died < 0).sort((a, b) => a.born - b.born);
   if (!kids.length) return false;
-  const k = kids[0];
+  // 생전에 뒤를 맡긴 자식이 살아 있으면 그가 잇는다
+  const named = w.chars[P.flags?.heir ?? -1];
+  const k = named && named.died < 0 && kids.includes(named) ? named : kids[0];
   k.isPlayer = true;
   w.player = { charId: k.id, prompt: null, lastEvents: {}, path: '', results: [], dead: false, flags: {}, generation: (P.generation ?? 1) + 1, jobsHad: [], jobSince: w.t };
   for (const key of ['wokeAncient', 'minerDragon', 'calmAncient', 'saved', 'dragonKills', 'treeMade', 'slayDl', 'elope']) if (P.flags?.[key]) w.player.flags![key] = P.flags[key];
