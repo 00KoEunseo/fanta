@@ -77,6 +77,8 @@ try { const js = serialize(w); saveKB = Math.round(js.length / 1024); saveGzKB =
 console.log(JSON.stringify({
   seed, years: +(span).toFixed(0), deterministic, saveOk, saveKB, saveGzKB, doomAt,
   perf: { msPerTick: +((performance.now() - t0) / (w.t || 1)).toFixed(1), worst: Math.round(worst) },
+  // 큰 사건(imp 4+)은 하나도 빠짐없이 남아 있어야 한다
+  hiKept: { produced: all.filter(n => n.imp >= 4).length, stored: w.news.filter(n => n.imp >= 4).length },
   news: { total: all.length, perYear: +(all.length / span).toFixed(1), stored: w.news.length, oldestStoredYear: w.news[0] ? Math.floor(w.news[0].t / 12) : 0, firstYear: all[0] ? Math.floor(all[0].t / 12) : 0,
     catShare: Object.fromEntries(Object.entries(byCat).map(([k, v]) => [k, +(v / all.length).toFixed(3)])),
     imp4PerYear: +(hi.length / span).toFixed(2), imp5: imp5.length, imp5Repeats, top, hiTop },

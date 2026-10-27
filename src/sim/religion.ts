@@ -310,3 +310,16 @@ export function onPilgrimArrive(w: World, c: Character, s: Settlement | Site | u
   charLog(w, c, `${r.name}의 성지에서 '${r.deity}'께 기도를 올렸다.`, 2);
   void s;
 }
+
+/** 홀로 선 이가 가르침을 연다 (열강 등): 아직 믿는 신앙이 없을 때 */
+export function foundFaith(w: World, c: Character): Religion | null {
+  if (faithOf(w, c.faith) || c.traits[FAITH] < 50) return null;
+  return newReligion(w, c, 'temple');
+}
+
+/** 그 고을에 신앙을 전한다 (빛과 어둠이 맞서면 받아들이지 않는다). 받아들였으면 true */
+export function spreadTo(w: World, s: Settlement, r: Religion): boolean {
+  if (s.faith === r.id || welcome(w, s, r) <= 0) return false;
+  s.faith = r.id;
+  return true;
+}

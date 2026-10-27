@@ -1,4 +1,5 @@
 import { RACES, type RaceKey } from '../data/races';
+import { paragonMonth } from './paragon';
 import { onPilgrimArrive, pilgrimSite } from './religion';
 import { knows, knowsRealm, reachFactor } from './contact';
 import { lordLine, marketLine, prayLine, rulerLine, serveLine, socialLine, studyLine, trainLine } from './flavor';
@@ -274,7 +275,7 @@ export function travelCheck(w: World, c: Character, dest: Pos, purpose: NonNulla
   if (w.demonLord === c.id && !c.isPlayer && purpose !== 'return' && purpose !== 'flee') return null;
   const path = findPath(w, c, dest, { race: c.race, flying: RACES[c.race].flying }, 30000);
   if (!path) return null;
-  const free = purpose === 'return' || purpose === 'duel' || purpose === 'hunt' || purpose === 'flee' || c.race === 'dragon' || isHero(c) || w.demonLord === c.id;
+  const free = purpose === 'return' || purpose === 'duel' || purpose === 'hunt' || purpose === 'flee' || purpose === 'quest' || c.race === 'dragon' || isHero(c) || w.demonLord === c.id || !!c.paragon;
   if (free) return { strict: null };
   if (borderBlocked(w, c, path, false)) return null;
   return { strict: strictBorder(w, c, path) };
@@ -308,7 +309,7 @@ export function setTravel(w: World, c: Character, dest: Pos, purpose: NonNullabl
   if (w.demonLord === c.id && !c.isPlayer && purpose !== 'return' && purpose !== 'flee') return false;
   const path = findPath(w, c, dest, { race: c.race, flying: RACES[c.race].flying }, 30000);
   if (!path) return false;
-  const free = purpose === 'return' || purpose === 'duel' || purpose === 'hunt' || purpose === 'flee' || c.race === 'dragon' || isHero(c) || w.demonLord === c.id;
+  const free = purpose === 'return' || purpose === 'duel' || purpose === 'hunt' || purpose === 'flee' || purpose === 'quest' || c.race === 'dragon' || isHero(c) || w.demonLord === c.id || !!c.paragon;
   if (!free) {
     const blocked = borderBlocked(w, c, path);
     if (blocked) {
@@ -553,6 +554,8 @@ export function characterMonth(w: World, c: Character): void {
     return;
   }
   if (c.act.kind === 'travel') { travelMonth(w, c); return; }
+  // 열강은 제 뜻대로 움직인다 (평범한 일상을 살지 않는다)
+  if (c.paragon) { paragonMonth(w, c); return; }
   // 나이가 들수록 상처가 더디게 아문다
   const old = ageOf(w, c) > c.lifespan * 0.6;
   c.stats.health = clamp(c.stats.health + (old ? 0.8 : 1.5));
@@ -779,7 +782,7 @@ function randomNeighbor(w: World, c: Character): Character | null {
 export function tryMarry(w: World, c: Character, forced?: Character): boolean {
   const rng = w.rngSim;
   const cands = forced ? [forced] : w.chars.filter(o => o.died < 0 && o.spouse < 0 && o.sex !== c.sex && o.race === c.race
-    && fertile(w, o) && o.id !== c.id && !o.isPlayer && o.act.kind === 'idle' && o.role !== '노예'
+    && fertile(w, o) && o.id !== c.id && !o.isPlayer && o.act.kind === 'idle' && o.role !== '노예' && !o.paragon
     && (o.home === c.home || (o.l === c.l && dist(o, c) < 15)) && !kin(c, o));
   if (!cands.length) return false;
   const o = forced ?? rng.weighted(cands, x => 1 + Math.max(0, rel(c, x.id) + 30) + x.stats.charisma * 0.3 + (x.home === c.home ? 20 : 0));
@@ -876,6 +879,10 @@ function arrive(w: World, c: Character): void {
         }
       } else charLog(w, c, '목표를 놓쳤다.');
       if (c.died < 0) goHome(w, c);
+      break;
+    }
+    case 'quest': {
+      // 열강의 일: 닿은 자리에 머문다 (무엇을 할지는 paragon.ts가 정한다)
       break;
     }
     case 'muster': {

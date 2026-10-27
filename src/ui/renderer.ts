@@ -457,7 +457,7 @@ export class MapRenderer {
         if (c.act.kind === 'army' || c.act.kind === 'colonize' || c.act.kind === 'voyage' || c.act.kind === 'fleet') continue;
         // 상단을 이끄는 이는 수레로 그린다 (군대 표시를 끄면 사람으로 보인다)
         if ((c.act.kind === 'caravan' || c.act.kind === 'camp') && this.showArmies) continue;
-        const special = c.race === 'dragon' || isHero(c) || w.demonLord === c.id || c.isPlayer || c.id === this.selectedChar || w.factions[c.faction]?.leader === c.id;
+        const special = c.race === 'dragon' || isHero(c) || w.demonLord === c.id || c.isPlayer || c.id === this.selectedChar || w.factions[c.faction]?.leader === c.id || !!c.paragon;
         // 개간하러 나간 이들은 멀리서도 보인다 (땅이 넓어지는 모습)
         const working = false;
         if (!special && !working && s < 6) continue;
@@ -479,6 +479,13 @@ export class MapRenderer {
           glyph(ctx, '⚒', sx + Math.max(5, s * 0.55), sy - Math.max(5, s * 0.55));
         }
       }
+    }
+    // 열강의 거처
+    for (const c of w.chars) {
+      if (c.died >= 0 || !c.paragon || c.paragon.seat.l !== cam.l) continue;
+      const [sx, sy] = this.toScreen(c.paragon.seat.x + 0.5, c.paragon.seat.y + 0.5);
+      ctx.fillStyle = '#ffd24a'; ctx.font = `bold ${Math.max(10, s * 0.9)}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      glyph(ctx, '⌂', sx, sy);
     }
     // 주둔지: 세력 색 천막, 그리고 노리는 적 고을까지 이어진 전선
     if (this.showArmies) for (const k of w.camps ?? []) {

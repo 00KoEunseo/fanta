@@ -67,6 +67,13 @@ function armyOutcome(w: World, c: Character, a: Army | undefined) {
   const home = w.settlements[c.home];
   if (home && home.alive) relocate(w, c, home);
   if (!a) return;
+  // 주둔지에 합류한 군대: 한 철 보초를 서고 교대해 돌아왔다
+  if (a.toCamp) {
+    const camp = w.camps?.[a.camp ?? -1];
+    c.fame += 3; c.stats.command = clamp(c.stats.command + 1);
+    charLog(w, c, `${camp ? camp.name : '주둔지'}에 닿아 한 철 동안 보초를 섰다. 교대 명령을 받고 고향으로 돌아왔다.`, 2);
+    return;
+  }
   const won = !!tgt && tgt.faction === a.faction;
   const crushed = !won && a.soldiers < start * 0.35;
   if (won) {

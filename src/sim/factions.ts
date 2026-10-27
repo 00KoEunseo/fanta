@@ -675,7 +675,9 @@ export function launchRaid(w: World, f: Faction): void {
   const targets = w.settlements.filter(s => {
     if (!s.alive || s.faction === f.id) return false;
     const o = w.factions[s.faction];
-    if (!o || (o.truce[f.id] ?? -1) > w.t || !knows(w, f, o)) return false;
+    if (!o || (o.truce[f.id] ?? -1) > w.t) return false;
+    // 모르는 이웃이라도 굶주린 무리는 가까운 낯선 고을의 연기를 보고 쳐들어간다 (그 약탈이 첫 조우가 된다)
+    if (!knows(w, f, o) && !f.flags.includes('food_crisis')) return false;
     if (facRel(f, o.id) > 15 || f.treaties.some(t => t.with === o.id)) return false;
     return true;
   });
@@ -684,6 +686,7 @@ export function launchRaid(w: World, f: Faction): void {
     const near = nearestOwn(w, f, s);
     if (!near) continue;
     const d = approxDist(w, near, s);
+    // 굶주린 무리는 모르는 땅이라도 먹을 것을 찾아 멀리까지 나선다
     if (d > 32) continue;
     const score = s.stock[FOOD] + s.stock[GOLD] * 2 - s.pop * 0.3 - d * 3;
     if (score > bs) { bs = score; best = s; src = near; }
@@ -779,7 +782,8 @@ export function fallFaction(w: World, f: Faction): void {
 export function homelessMonth(w: World, c: Character): void {
   const rng = w.rngSim;
   if (c.home >= 0 && w.settlements[c.home]?.alive && c.faction >= 0) return;
-  if (c.race === 'dragon' || c.act.kind !== 'idle') return;
+  // 열강은 어느 나라에도 깃들지 않는다
+  if (c.race === 'dragon' || c.act.kind !== 'idle' || c.paragon) return;
   // 나라를 잃은 '나'는 먼저 스스로 거취를 고른다 (한 해 동안은 기다린다)
   if (c.isPlayer && w.player && ['peril_fall', 'peril_fallen'].some(k => (w.player!.flags?.[k] ?? -99) >= w.t - 12)) return;
   if (c.faction >= 0 && w.factions[c.faction]?.alive) {

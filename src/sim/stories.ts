@@ -1,5 +1,6 @@
 // 지금 세상에서 벌어지고 있는 큰 이야기들: 전쟁, 마왕의 치세, 깨어난 고대 용, 대역병, 토벌대, 심연의 군주.
 // 매달 기록부를 갱신해 언제 시작되었는지 기억하고, 끝나면 결말 한 줄을 남긴다. 난수를 쓰지 않는다.
+import { paragonDoing } from './paragon';
 import type { Pos, World } from './state';
 import { yearOf } from './state';
 import { fixJosa } from '../data/text';
@@ -67,6 +68,13 @@ export function currentStories(w: World): StoryView[] {
     const id = `party:${p.id}`, t0 = since(id);
     out.push({ id, kind: 'party', title: p.name || `${lead.name}의 토벌대`, since: t0, weight: 40 + p.members.length, pos: lead,
       lines: [`${lead.name}이(가) 이끄는 ${p.members.length}명이 ${foe.name}을(를) 쫓는다.`, `길을 나선 지 ${yrs(w, t0) || '한 해도 되지 않았다'}${yrs(w, t0) ? '년' : ''}.`] });
+  }
+  // 열강
+  for (const c of w.chars) {
+    if (c.died >= 0 || !c.paragon) continue;
+    const id = `paragon:${c.id}`, t0 = since(id);
+    out.push({ id, kind: 'party', title: `열강 ${c.epithet ? c.epithet + ' ' : ''}${c.name}`, since: t0, weight: 35, pos: c,
+      lines: [`${c.paragon.seat.name}에 거처를 두었다.`, `${paragonDoing(w, c)}.`] });
   }
   // 전쟁 (오래되고 큰 것부터)
   const wars: StoryView[] = [];

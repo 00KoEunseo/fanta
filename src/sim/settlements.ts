@@ -96,6 +96,9 @@ export function settlementMonth(w: World, s: Settlement): void {
     let p = sum[r] * wf * R.prodMul[r] * devMul * stabMul;
     if (r === FOOD) {
       p *= seasonMul(w, s);
+      // 땅에서 곡식이 나지 않는 지하와 마계: 버섯 농사와 굴짐승 사냥으로 끼니를 스스로 잇는다
+      // (교역이 열리기 전에도 굶어 죽지 않도록. 남는 땅의 소출과 교역이 곧 여유가 된다)
+      if (s.l >= 3) p += R.needs[FOOD] * s.pop / 20;
       if (hasFlag(s, 'drought', w.t)) p *= 0.35;
       if (hasFlag(s, 'blessed', w.t)) p *= 1.4;
     }

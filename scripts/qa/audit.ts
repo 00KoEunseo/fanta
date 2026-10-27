@@ -65,7 +65,7 @@ for (const r of W) {
   const txt = Object.entries(r.text.counts).map(([k, v]) => `${k} ${v}`).join(', ');
   chk(`[${r.seed}] 글자 오류`, !txt, txt + ' ' + JSON.stringify(r.text.samples).slice(0, 300));
   chk(`[${r.seed}] 시대 이름 중복`, r.eras.count <= 1 || r.eras.unique / r.eras.count >= 0.8, `${r.eras.unique}/${r.eras.count}: ${r.eras.names.join(', ')}`);
-  chk(`[${r.seed}] 초기 역사 보존`, r.news.oldestStoredYear - r.news.firstYear <= 5, `저장된 가장 오래된 소식 ${r.news.oldestStoredYear}년 (시작 ${r.news.firstYear}년, 총 ${r.news.total}건 중 ${r.news.stored}건 보관)`);
+  chk(`[${r.seed}] 큰 사건 보존`, !r.hiKept || r.hiKept.stored >= r.hiKept.produced, r.hiKept ? `큰 사건 ${r.hiKept.produced}건 중 ${r.hiKept.stored}건 보관 (전체 소식 ${r.news.total}건 중 ${r.news.stored}건)` : '');
   chk(`[${r.seed}] 명품 쏠림`, r.world.maxArtifactsHeld <= 5, `한 사람 최대 ${r.world.maxArtifactsHeld}개`, true);
   chk(`[${r.seed}] 세력 생존`, r.world.factionsAlive >= 4, `생존 ${r.world.factionsAlive} / 누적 ${r.world.factionsEver}`);
   chk(`[${r.seed}] 직업 쏠림`, !r.world.topRole || r.world.topRole[1] < 0.2, `최다 직업 ${r.world.topRole?.join(' ')}`, true);
@@ -79,6 +79,8 @@ for (const r of uis) {
   chk(`[${r.seed}] 연대기의 장`, r.chapters.every((c: any) => c.lines >= 2), r.chapters.map((c: any) => `${c.name} ${c.lines}줄`).join(', '));
 }
 // ── 생애 불변식
+// 태어날 고을이 없어 건너뛴 생애: 그 종족이 20년 안에 사라졌다는 뜻이다 (초반 균형이 무너진 신호)
+{ const sk = lives.filter(r => r.skipped); chk('초반 종족 소멸', sk.length === 0, sk.map((r: any) => `${r.seed} ${r.race}`).join(', ') || '없음', true); }
 for (const r of Lf) {
   const tag = `[${r.seed} ${r.race}/${r.origin}]`;
   chk(`${tag} 사별 기록`, r.widowLogged === r.spouseDeaths, `배우자 사망 ${r.spouseDeaths}, 일대기 기록 ${r.widowLogged}`);

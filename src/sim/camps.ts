@@ -86,7 +86,11 @@ export function joinCamp(w: World, a: Army): boolean {
   for (let r = 0; r < a.loot.length; r++) w.settlements[camp.home] && (w.settlements[camp.home].stock[r] += a.loot[r]);
   a.alive = false;
   const c = w.chars[a.commander];
-  if (c && c.died < 0) {
+  // 군주와 '나'는 주둔지에 눌러앉지 않는다 (군주는 도성으로, '나'는 출정 결과를 받는다)
+  const lord = c && w.factions[c.faction]?.leader === c.id;
+  if (c && c.died < 0 && (lord || c.isPlayer)) {
+    if (lord) { c.act = { kind: 'idle' }; const h = w.settlements[c.home]; if (h && h.alive) relocate(w, c, h); }
+  } else if (c && c.died < 0) {
     const cur = w.chars[camp.commander];
     if (!cur || cur.died >= 0 || cur.act.kind !== 'camp') {
       camp.commander = c.id;

@@ -82,6 +82,7 @@ export function titleOf(w: World, c: Character): string {
   const f = w.factions[c.faction];
   if (f && f.leader === c.id) return RACES[f.race].titles[f.tier] ?? '군주';
   if (c.race === 'dragon') return c.ancient ? '고대 용' : '용';
+  if (c.paragon) return '열강';
   if (isHero(c)) return '용사';
   for (const sid of f ? f.settlements : []) {
     const s = w.settlements[sid];
@@ -166,6 +167,8 @@ export function charPower(c: Character, w?: World): number {
   if (c.race === 'dragon') p += c.ancient ? 160 : 90;
   if (c.awakened.includes('hero')) p += 25;
   if (c.awakened.includes('demonlord')) p += 30;
+  // 열강은 이름 그대로 강하다
+  if (c.paragon) p += 50;
   if (w) p += artPower(w, c);
   return p;
 }

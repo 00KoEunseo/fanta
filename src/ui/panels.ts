@@ -13,6 +13,7 @@ import { eraName } from '../sim/news';
 import { currentStories, storyIcon, storyYears } from '../sim/stories';
 import { knows } from '../sim/contact';
 import { TENET_DESC, TENET_NAME, clergyTitle, faithOf } from '../sim/religion';
+import { MOTIVE_NAME, paragonDoing } from '../sim/paragon';
 import type { Caravan } from '../sim/caravan';
 import type { Camp } from '../sim/camps';
 import { capacity } from '../sim/settlements';
@@ -111,6 +112,7 @@ export function inspectChar(w: World, c: Character, secret: boolean): string {
   if (c.awakened.includes('sage')) tags.push('<span class="chip blue">현자</span>');
   if (c.awakened.includes('merchant')) tags.push('<span class="chip gold">거상</span>');
   if (c.awakened.includes('king')) tags.push('<span class="chip gold">왕의 그릇</span>');
+  if (c.paragon && c.died < 0) tags.push(`<span class="chip gold" title="${esc(paragonDoing(w, c))}">열강 · ${MOTIVE_NAME[c.paragon.motive]}</span>`);
   { const fr = faithOf(w, c.faith); if (fr) tags.push(`<span class="chip" title="${esc(fr.tenets.map(t => TENET_NAME[t]).join('·'))}">${esc(fr.name)}${clergyTitle(w, c) ? ` ${clergyTitle(w, c)}` : ''}</span>`); }
   if (c.awakened.includes('seed') && (secret || w.demonLord === c.id)) tags.push('<span class="chip red">마왕의 씨앗</span>');
   if (c.awakened.includes('traitor')) tags.push('<span class="chip red">배신자</span>');
@@ -127,8 +129,8 @@ export function inspectChar(w: World, c: Character, secret: boolean): string {
     if (c.ancient && c.wrathUntil !== undefined) tags.push(`<span class="chip">분노 ${Math.max(0, Math.ceil((c.wrathUntil - w.t) / 12))}년 남음</span>`);
   }
   for (const it of c.items) tags.push(`<span class="chip">${esc(it)}</span>`);
-  const where = c.act.kind === 'travel' ? `여행 중 (${{ adventure: '모험', trade: '교역', visit: '방문', hunt: '토벌', return: '귀환', pilgrim: '순례', duel: '결전', flee: '피난', clear: '개간지로', muster: '괴수 토벌 집결지로' }[c.act.purpose ?? 'visit']})`
-    : c.act.kind === 'clear' ? `${esc(w.settlements[c.act.target ?? -1]?.name ?? '')} 바깥의 땅을 개간하는 중` : c.act.kind === 'army' ? '출정 중' : c.act.kind === 'colonize' ? '이주 행렬 인솔 중' : c.act.kind === 'caravan' ? '교역 중 (상단 인솔)' : c.act.kind === 'camp' ? '주둔지 지휘' : (c.sleep ?? 0) > 0 ? `잠듦 (${c.sleep}개월)` : '머무는 중';
+  const where = c.act.kind === 'travel' ? `여행 중 (${{ adventure: '모험', trade: '교역', visit: '방문', hunt: '토벌', return: '귀환', pilgrim: '순례', duel: '결전', flee: '피난', clear: '개간지로', muster: '괴수 토벌 집결지로', quest: '열강의 길' }[c.act.purpose ?? 'visit']})`
+    : c.act.kind === 'clear' ? `${esc(w.settlements[c.act.target ?? -1]?.name ?? '')} 바깥의 땅을 개간하는 중` : c.act.kind === 'army' ? '출정 중' : c.act.kind === 'colonize' ? '이주 행렬 인솔 중' : c.paragon && c.died < 0 ? esc(paragonDoing(w, c)) : c.act.kind === 'caravan' ? '교역 중 (상단 인솔)' : c.act.kind === 'camp' ? '주둔지 지휘' : (c.sleep ?? 0) > 0 ? `잠듦 (${c.sleep}개월)` : '머무는 중';
   const fam: string[] = [];
   if (c.father >= 0) fam.push(`부: ${charLink(w, w.chars[c.father], w.chars[c.father].name)}`);
   if (c.mother >= 0) fam.push(`모: ${charLink(w, w.chars[c.mother], w.chars[c.mother].name)}`);
@@ -440,6 +442,7 @@ export function legendHTML(): string {
     ['⚑', '#9ad06a', '이주민'],
     ['▣', '#e8c060', '상단 (교역 짐수레)'],
     ['▲', '#e05040', '주둔지 (붉은 점선: 전선)'],
+    ['⌂', '#ffd24a', '열강의 거처'],
     ['Ω', '#f0dca0', '유적'],
     ['▼', '#f0dca0', '던전'],
     ['†', '#8a8070', '무너진 신전 터'],

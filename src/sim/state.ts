@@ -135,7 +135,7 @@ export interface LogEntry { t: number; text: string; imp?: number }
 export type ActivityKind = 'idle' | 'travel' | 'army' | 'colonize' | 'party' | 'voyage' | 'fleet' | 'clear' | 'caravan' | 'camp';
 export interface Activity {
   kind: ActivityKind;
-  purpose?: 'adventure' | 'trade' | 'visit' | 'hunt' | 'return' | 'pilgrim' | 'duel' | 'flee' | 'clear' | 'muster';
+  purpose?: 'adventure' | 'trade' | 'visit' | 'hunt' | 'return' | 'pilgrim' | 'duel' | 'flee' | 'clear' | 'muster' | 'quest';
   /** 개척을 시작한 때 */
   since?: number;
   /** 먼 길 (지도에 끝까지 경로를 보인다) */
@@ -187,6 +187,8 @@ export interface Character extends Pos {
   sleep?: number;
   /** 믿는 신앙 */
   faith?: number;
+  /** 열강: 나라를 떠나 홀로 선 강자 */
+  paragon?: import('./paragon').Paragon;
   /** 고향에 전할 소식: 길에서 처음 만난 세력들 */
   carry?: number[];
   /** 고향에 전할 소식: 다녀온 낯선 층 */

@@ -12,6 +12,10 @@
 | `npx tsx scripts/qa/audit.ts --lives=40` | 생애만 40개 (생애 지표를 큰 표본으로 비교) | 약 6분 |
 | `bash scripts/qa/baseline.sh [커밋] [옵션]` | 그 커밋의 코드로 기준선을 다시 만든다 | 위와 같음 |
 | `npx tsx scripts/qa/save-size.ts <시드> <년>` | 저장 파일에서 무엇이 자리를 차지하는지 | 약 1분 |
+| `npx tsx scripts/qa/contact-check.ts <시드들>` | 첫 조우·첫 교역·첫 전쟁, 소문과 층 발견 | 약 3분 |
+| `npx tsx scripts/qa/religion-check.ts <시드들> <년>` | 신앙의 탄생·전파·국교·대신관·성전 명분 | 약 3분 |
+| `npx tsx scripts/qa/camp-check.ts <시드들> <년>` | 주둔지 세움·출격·철수·함락 | 약 3분 |
+| `npx tsx scripts/qa/paragon-check.ts <시드들> <년>` | 열강의 등장·종족·목적별 행적·도전자 | 약 3분 |
 | `npx tsx scripts/qa/compat.ts <저장 파일>` | 예전 코드로 만든 저장 파일을 지금 코드로 불러와 30년 진행·화면·재저장을 확인한다 | 약 1분 |
 | `npx tsx scripts/qa/ui-smoke.ts <시드> <년>` | 모든 탭·정보창의 HTML을 만들어 오류·빈 값·조사 표기를 찾는다 (audit에 포함) | 약 1분 |
 

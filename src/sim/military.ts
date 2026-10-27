@@ -11,6 +11,7 @@ import { addNews, charLog } from './news';
 import { MOVE_FLY, MOVE_WALK, advance, findPath, posOf } from './path';
 import type { Army, ArmyGoal, Character, Faction, Pos, Settlement, World } from './state';
 import { campsMonth, joinCamp, returnToCamp } from './camps';
+import { learn } from './contact';
 import { addFacRel, charLabel, clamp, isAdult, leaderOf, rel, charPower } from './helpers';
 import { awaken, killChar, setPos } from './characters';
 import { aggrieve, fallFaction, invalidateDist, transferSettlement } from './factions';
@@ -207,6 +208,11 @@ function arrive(w: World, a: Army): void {
   if (!s || !s.alive || s.faction === a.faction) { goHomeArmy(w, a); return; }
   const def = w.factions[s.faction];
   if (a.goal !== 'raid' && def && f.wars[def.id] === undefined) { goHomeArmy(w, a); return; }
+  // 처음 보는 이들의 약탈: 이기든 막아내든, 서로의 존재를 피로 알게 된다
+  if (a.goal === 'raid' && def && learn(w, def, f)) {
+    learn(w, f, def);
+    addNews(w, `처음 보는 ${f.name}의 약탈대가 ${s.name}에 쳐들어왔다. ${def.name}이(가) ${f.name}과(와) 처음으로 조우하였다.`, 3, 'war', { pos: s, facs: [f.id, def.id] });
+  }
   const p = pAttackWin(w, a, s);
   const win = rng.chance(p);
   const cmd = w.chars[a.commander];
