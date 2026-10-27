@@ -475,6 +475,16 @@ export class MapRenderer {
         }
       }
     }
+    // 상단: 짐을 실은 행렬
+    if (this.showArmies) for (const k of w.caravans ?? []) {
+      if (!k.alive || k.l !== cam.l) continue;
+      const t = Math.min(1, (now - this.tickTime) / this.animMs);
+      const [sx, sy] = this.toScreen((k.pl === k.l ? k.px + (k.x - k.px) * t : k.x) + 0.5, (k.pl === k.l ? k.py + (k.y - k.py) * t : k.y) + 0.5);
+      ctx.fillStyle = '#e8c060';
+      ctx.font = `${Math.max(9, s * 0.8)}px sans-serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('⛟', sx, sy);
+    }
     // 최근 큰 사건의 자리: 오래될수록 흐려지는 마름모, 가장 큰 일은 붉게 고동친다
     if (this.showPins) {
       for (const p of this.pins) {

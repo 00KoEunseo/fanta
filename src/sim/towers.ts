@@ -1,3 +1,4 @@
+import { fixJosa } from '../data/text';
 // 바벨탑: 하늘에 닿으려는 탐욕의 탑. 마왕의 손에 들어가면 마왕탑이 된다.
 import { RACES } from '../data/races';
 import * as T from '../data/terrain';
@@ -231,7 +232,7 @@ function expedition(w: World, tw: Tower, f: Faction) {
     if (!angel) return;
     const art = makeArtifact(w, angel, rng.pick(['보석', '왕관', '지팡이'] as const), rng.pick(['천상의 하프', '빛의 깃털', '새벽의 성배', '별의 눈물']), 30, true);
     art.holder = ld.id;
-    art.story.push({ t: w.t, text: `${f.name}의 원정대가 ${tw.name}을(를) 타고 올라가 천상에서 훔쳐 왔다.` });
+    art.story.push({ t: w.t, text: fixJosa(`${f.name}의 원정대가 ${tw.name}을(를) 타고 올라가 천상에서 훔쳐 왔다.`) });
     addFacRel(w, f, angels, -40);
     addNews(w, `${f.name}의 원정대가 ${tw.name}을(를) 타고 천상에 올라 「${art.name}」을(를) 훔쳐 왔다. 천사들의 분노가 하늘을 울렸다.`, 4, 'dark', { pos: tw, facs: [f.id, angels.id], chars: [ld.id] });
     if (ld.traits[1] > 75 && rng.chance(0.3)) { declareWar(w, f, angels); launchAttack(w, f, angels, 'conquer'); }

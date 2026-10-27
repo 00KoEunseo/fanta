@@ -63,6 +63,7 @@ export function deserialize(json: string): World {
     w.sealsV = 2;
   }
   w.alliances ??= [];
+  w.caravans ??= [];
   w.doom.dragonGrievance ??= 0;
   if (w.worldTree === undefined) {
     const t = w.settlements.find(s => s.flags.includes('worldtree'));

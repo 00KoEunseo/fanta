@@ -165,3 +165,16 @@ export function charPower(c: Character, w?: World): number {
   if (w) p += artPower(w, c);
   return p;
 }
+
+/** 조상 가운데 조건에 맞는 이를 찾는다 (몇 대 위인지 함께). 핏줄은 아버지·어머니를 따라 올라간다 */
+export function findAncestor(w: World, c: Character, test: (a: Character) => boolean, maxGen = 5): { who: Character; gen: number } | null {
+  let layer = [c];
+  for (let gen = 1; gen <= maxGen; gen++) {
+    const next: Character[] = [];
+    for (const x of layer) for (const id of [x.father, x.mother]) { const p = w.chars[id]; if (p) next.push(p); }
+    for (const p of next) if (test(p)) return { who: p, gen };
+    if (!next.length) return null;
+    layer = next;
+  }
+  return null;
+}

@@ -221,6 +221,7 @@ export function inspectFaction(w: World, f: Faction): string {
       <span>인구</span><span>${fmtNum(f.pop)}</span>
       <span>군사력</span><span>${fmtNum(f.military)}</span>
       <span>평균 발전</span><span>${Math.round(f.avgDev)}</span>
+      ${f.treaties.length || w.stats[`caravanOk${f.id}`] ? `<span title="뭍길 교역은 반년마다 상단이 실제로 걸어서 짐을 나른다. 전쟁 중인 땅을 지나면 털릴 수 있다">상단 ⓘ</span><span>무사히 오간 ${w.stats[`caravanOk${f.id}`] ?? 0}번 · 지금 길 위 ${(w.caravans ?? []).filter(k => k.alive && k.fac === f.id).length}</span>` : ''}
       <span title="땅은 사람이 있어야 지켜진다. 고을마다 12칸 + 인구 3명당 1칸을 지킬 수 있고, 넘치는 땅은 매달 조금씩 손을 놓는다">영토 ⓘ</span><span>${ss.reduce((a, s) => a + s.tiles.length, 0)}칸 / 지킬 수 있는 땅 ${Math.round(ss.reduce((a, s) => a + 12 + s.pop / 3, 0))}칸</span>
       <span>정통성</span><span>${Math.round(f.legitimacy)}</span>
       <span>확장 성향</span><span>${(() => { const st = expandStyle(w, f); return `${st} <small class="dim">— ${STYLE_DESC[st]}</small>`; })()}</span>

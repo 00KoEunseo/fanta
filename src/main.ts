@@ -1,8 +1,9 @@
 import { createWorld } from './sim/world';
 import { tick } from './sim/tick';
 import type { World } from './sim/state';
-import { LAYER_INFO, SEASON_NAMES, dateStr, seasonOf } from './sim/state';
+import { LAYER_INFO, SEASON_NAMES, dateStr, seasonOf, yearOf } from './sim/state';
 import { createPlayer, continueAsHeir, resolvePlayer } from './sim/player';
+import { bookHTML } from './ui/book';
 import { exportFile, hasLocalSave, importFile, loadLocal, saveLocal } from './sim/save';
 import { MapRenderer, type MapMode } from './ui/renderer';
 import * as P from './ui/panels';
@@ -604,6 +605,15 @@ function bindInput() {
   });
   $('btn-load').addEventListener('click', () => M.loadModal(hasLocalSave(), { onLocal: loadSaved, onFile: loadFromFile }));
   $('btn-export').addEventListener('click', () => S.w && exportFile(S.w));
+  $('btn-book').addEventListener('click', () => {
+    if (!S.w) return;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([bookHTML(S.w)], { type: 'text/html' }));
+    a.download = `연대기-${S.w.seed}-${yearOf(S.w)}년.html`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    M.toast('연대기를 한 권의 책으로 엮었다.');
+  });
   $('btn-born').addEventListener('click', () => openBirth());
 
   document.querySelectorAll<HTMLButtonElement>('#mode-tabs button').forEach(b => b.addEventListener('click', () => {

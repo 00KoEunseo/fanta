@@ -364,6 +364,8 @@ export interface World {
   towers: import('./towers').Tower[];
   /** 이름 있는 병들 */
   diseases: import('./disease').Disease[];
+  /** 길 위의 상단 */
+  caravans?: import('./caravan').Caravan[];
   /** 큰 이야기들의 기록부 (이야기 탭) */
   storyBook?: import('./stories').StoryBook;
   /** 이름 있는 명품과 작품들 */

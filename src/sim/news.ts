@@ -4,7 +4,8 @@ import { yearOf } from './state';
 
 /** 문장의 낱말 묶음 (숫자는 지운다): 같은 틀의 소식인지 견줄 때 쓴다 */
 function words(text: string): Set<string> {
-  return new Set(text.replace(/\d+/g, '').split(/\s+/).filter(Boolean));
+  // 괄호·인용 속 고유명은 빼고 견준다 (마왕탑 (옛 ○○의 탑)처럼 이름만 다른 같은 틀을 알아보도록)
+  return new Set(text.replace(/\([^)]*\)|「[^」]*」|'[^']*'/g, '').replace(/\d+/g, '').split(/\s+/).filter(Boolean));
 }
 function similar(a: Set<string>, b: Set<string>): boolean {
   let both = 0;

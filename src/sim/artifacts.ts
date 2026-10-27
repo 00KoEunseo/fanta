@@ -3,7 +3,7 @@ import type { Rng } from '../core/rng';
 import { fixJosa } from '../data/text';
 import { addNews, charLog } from './news';
 import type { Character, World } from './state';
-import { approxDist, charLabel, leaderOf } from './helpers';
+import { approxDist, charLabel, leaderOf, findAncestor } from './helpers';
 
 export type ArtKind = '검' | '도끼' | '방패' | '갑옷' | '왕관' | '활' | '지팡이' | '보석' | '책' | '노래' | '물약' | '태엽 장치' | '지도' | '찬가' | '주문' | '술';
 
@@ -141,6 +141,18 @@ export function giveArtifact(w: World, a: Artifact, to: Character | null, how: s
   if (to) charLog(w, to, `${artLabel(a)}을(를) 손에 넣었다.`, 3);
   if (from && from !== to && from.died < 0) charLog(w, from, `${artLabel(a)}을(를) 잃었다.`, 2);
   if (newsImp || a.fame >= 40) addNews(w, `${artLabel(a)}이(가) ${text}`, Math.max(newsImp, 2), 'life', { chars: to ? [to.id] : [] });
+  // 전설의 계보: 남의 손을 떠돌던 작품이 만든 이의 핏줄에게 돌아왔다
+  if (to && from && from.id !== a.maker) {
+    const root = findAncestor(w, to, x => x.id === a.maker);
+    const fromKin = findAncestor(w, from, x => x.id === a.maker);
+    if (root && !fromKin && root.gen >= 2) {
+      const gen = ['', '', '손자', '증손', '고손', '5대손'][root.gen] ?? `${root.gen}대손`;
+      const msg = `${a.makerName}이(가) 만든 「${a.name}」이(가) 오랜 떠돎 끝에 그의 ${gen} ${to.name}의 손에 돌아왔다.`;
+      story(w, a, msg);
+      addNews(w, msg, 3, 'hero', { chars: [to.id] });
+      a.fame += 10;
+    }
+  }
 }
 
 /** 주인이 죽으면: 죽인 자가 빼앗거나, 자식이 물려받거나, 군주가 거두거나, 유적에 묻힌다 */

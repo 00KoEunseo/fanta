@@ -3,6 +3,7 @@ import { raiseArmy } from './military';
 import { assignPioneers } from './pioneer';
 import { clashMonth, dragonClashes } from './clash';
 import { updateStories } from './stories';
+import { caravanMonth } from './caravan';
 import { addNews } from './news';
 import { eraTick } from './news';
 import type { World } from './state';
@@ -53,6 +54,7 @@ export function tick(w: World): void {
     updateRank(w, c);
   }
   armiesMonth(w);
+  caravanMonth(w);
   crusadeMonth(w);
   housesMonth(w);
   seaMonth(w);

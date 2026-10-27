@@ -191,7 +191,8 @@ function teamFight(w: World, p: Party, enemy: Character, label: string): boolean
       if (m !== finisher && rng.chance(0.12)) killChar(w, m, `${label}에서 전사`, enemy);
     }
     if (enemy.race === 'dragon' && !finisher.epithet) finisher.epithet = EPITHETS.dragonslayer;
-    killChar(w, enemy, `${p.name}과(와)의 ${label}`, finisher);
+    // '마왕과의 결전' 같은 이름표에서 싸움의 이름만 떼어 '○○ 토벌대와의 결전'으로
+    killChar(w, enemy, `${p.name}과(와)의 ${label.replace(/^.+?[과와]의 /, '')}`, finisher);
     if (finisher.apt[1] >= 60 && !isHero(finisher)) awaken(w, finisher, 'hero', `${label}의 마지막 일격을 날린 그 순간,`);
     return true;
   }

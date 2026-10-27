@@ -1,3 +1,4 @@
+import { sendCaravan } from './caravan';
 import { RACES, raceAffinity, type RaceKey } from '../data/races';
 import { markPeril } from './peril';
 import { seaRoute, seaThreatNear } from './sea';
@@ -411,7 +412,15 @@ export function facDist(w: World, a: Faction, b: Faction): number {
 }
 export function invalidateDist(w: World): void { distCache.delete(w); routeCache.delete(w); }
 
-const routeCache = new WeakMap<World, Map<string, { t: number; d: number; sea: boolean }>>();
+const routeCache = new WeakMap<World, Map<string, { t: number; d: number; sea: boolean; path?: number[]; from?: number }>>();
+/** 교역로를 따라 걷는 길 (수도 a → 수도 b 방향). 교역로를 잰 길을 그대로 다시 쓴다 */
+export function tradePath(w: World, a: Faction, b: Faction): number[] | null {
+  const r = tradeRoute(w, a, b);
+  const c = routeCache.get(w)?.get(a.capital < b.capital ? `${a.capital}-${b.capital}` : `${b.capital}-${a.capital}`);
+  if (!c || !c.path || r.sea) return null;
+  return c.from === a.capital ? c.path.slice() : c.path.slice().reverse();
+}
+
 /** 수도와 수도를 잇는 실제 교역로 (뭍길 또는 뱃길). 길이(칸)와 뱃길 여부 */
 export function tradeRoute(w: World, a: Faction, b: Faction): { d: number; sea: boolean } {
   const A = w.settlements[a.capital], B = w.settlements[b.capital];
@@ -427,7 +436,7 @@ export function tradeRoute(w: World, a: Faction, b: Faction): { d: number; sea: 
   let d = path ? path.length : Infinity, sea = false;
   const sd = seaRoute(w, A, B);
   if (sd + 8 < d) { d = sd + 8; sea = true; }
-  const r = { t: w.t, d, sea };
+  const r = { t: w.t, d, sea, path: path ?? undefined, from: A.id };
   m.set(k, r);
   return r;
 }
@@ -492,9 +501,12 @@ export function factionMonth(w: World, f: Faction): void {
       }
     }
     if (t.since < 0) continue;
-    if (tradeRoute(w, f, o).sea && (seaThreatNear(w, a) || seaThreatNear(w, b))) continue;
+    const route = tradeRoute(w, f, o);
+    if (route.sea && (seaThreatNear(w, a) || seaThreatNear(w, b))) continue;
     const amt = Math.min(a.stock[t.give] * 0.06, 6 + a.pop / 150);
-    a.stock[t.give] -= amt; b.stock[t.give] += amt;
+    if (route.sea) { a.stock[t.give] -= amt; b.stock[t.give] += amt; }
+    // 뭍길은 반년마다 상단이 반년치 짐을 싣고 실제로 걸어간다 (길이 없으면 예전처럼 바로 넘긴다)
+    else if (w.t % 6 === (f.id + t.with) % 6 && sendCaravan(w, f, o, a, b, t.give, amt * 6, tradePath(w, f, o)) === 'nopath') { a.stock[t.give] -= amt * 6; b.stock[t.give] += amt * 6; }
     f.relations[o.id] = clamp((f.relations[o.id] ?? 0) + 0.15, -100, 100);
   }
   // 길이 끊긴 교역은 깨진다

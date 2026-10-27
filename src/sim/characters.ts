@@ -22,8 +22,7 @@ import { MOVE_FLY, MOVE_WALK, advance, findPath, moveCost, posOf, rebuildPortalL
 import type { Character, Pos, Settlement, Site, World } from './state';
 import { ageOf, dist } from './state';
 import {
-  addRel, approxDist, charLabel, charPower, clamp, isAdult, isHero, leaderOf, rel, settlementsOf, titleOf,
-} from './helpers';
+  addRel, approxDist, charLabel, charPower, clamp, isAdult, isHero, leaderOf, rel, settlementsOf, titleOf, findAncestor } from './helpers';
 import { attemptCoup, invalidateDist } from './factions';
 import { ancientMonth, patronMonth } from './calamity';
 import { findBuried, onHolderDeath } from './artifacts';
@@ -337,6 +336,8 @@ export function killChar(w: World, c: Character, cause: string, killer?: Charact
   if (c.died >= 0) return;
   const label0 = charLabel(w, c);
   c.died = w.t;
+  // 사인은 화면과 책에 그대로 나오므로 조사를 바로잡아 둔다
+  cause = fixJosa(cause);
   c.cause = cause;
   onAngelDeath(w, c, killer);
   onHouseDeath(w, c);
@@ -394,7 +395,12 @@ export function awaken(w: World, c: Character, kind: 'hero' | 'sage' | 'merchant
   switch (kind) {
     case 'hero':
       c.stats.might = clamp(c.stats.might + 20); c.stats.magic = clamp(c.stats.magic + 10); c.fame += 40; c.honor += 30;
-      addNews(w, `${why} ${c.name}의 안에 잠들어 있던 용사의 자질이 깨어났다. 사람들은 그를 '용사'라 부르기 시작하였다.`, 4, 'hero', { pos: c, chars: [c.id] });
+      {
+        // 핏줄 속의 옛 용사: 몇 대를 건너 다시 깨어난 피
+        const anc = findAncestor(w, c, a => a.awakened.includes('hero'));
+        const blood = anc ? ` ${anc.gen}대 위의 용사 ${anc.who.name}의 피가 다시 깨어난 것이라 사람들은 수군거렸다.` : '';
+        addNews(w, `${why} ${c.name}의 안에 잠들어 있던 용사의 자질이 깨어났다. 사람들은 그를 '용사'라 부르기 시작하였다.${blood}`, 4, 'hero', { pos: c, chars: [c.id] });
+      }
       break;
     case 'sage':
       c.stats.intellect = clamp(c.stats.intellect + 15); c.stats.magic = clamp(c.stats.magic + 10); c.fame += 20;
