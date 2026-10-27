@@ -1,4 +1,5 @@
 import { RACES, type RaceKey } from '../data/races';
+import { knows, reachFactor } from './contact';
 import { lordLine, marketLine, prayLine, rulerLine, serveLine, socialLine, studyLine, trainLine } from './flavor';
 import { disasterStrikes } from './peril';
 import { TERRAIN } from '../data/terrain';
@@ -233,7 +234,7 @@ export function startExpedition(w: World, c: Character, siteId?: number): string
 
 /** 다른 곳으로 옮겨 간다: 가까우면 바로, 멀면 실제로 길을 걸어간다 (순간이동 금지) */
 export function relocate(w: World, c: Character, dest: Pos): void {
-  if (c.act.kind === 'army' || c.act.kind === 'colonize' || c.act.kind === 'party' || c.act.kind === 'voyage' || c.act.kind === 'fleet') return;
+  if (c.act.kind === 'army' || c.act.kind === 'colonize' || c.act.kind === 'party' || c.act.kind === 'voyage' || c.act.kind === 'fleet' || c.act.kind === 'caravan') return;
   if (c.l === dest.l && Math.hypot(c.x - dest.x, c.y - dest.y) <= 3) { setPos(c, dest); return; }
   if (c.act.kind === 'travel' && c.act.purpose === 'return' && c.act.dest && c.act.dest.l === dest.l && c.act.dest.x === dest.x && c.act.dest.y === dest.y) return;
   const keep = c.act;
@@ -538,6 +539,12 @@ export function characterMonth(w: World, c: Character): void {
     return;
   }
   if (c.act.kind === 'party' || c.act.kind === 'voyage' || c.act.kind === 'fleet') return;
+  // 상단을 이끄는 중: 상단이 함께 움직인다. 상단이 사라졌으면 일상으로
+  if (c.act.kind === 'caravan') {
+    const k = w.caravans?.[c.act.target ?? -1];
+    if (!k || !k.alive || !k.crew.includes(c.id)) c.act = { kind: 'idle' };
+    return;
+  }
   if (c.act.kind === 'travel') { travelMonth(w, c); return; }
   // 나이가 들수록 상처가 더디게 아문다
   const old = ageOf(w, c) > c.lifespan * 0.6;
@@ -648,15 +655,17 @@ function doAction(w: World, c: Character, act: ActionKey): void {
       break;
     }
     case 'trade': {
-      const dests = w.settlements.filter(s => s.alive && s.id !== c.home && s.l === c.l && dist(s, c) < 24
-        && (s.faction === c.faction || (f && (f.relations[s.faction] ?? 0) > -10 && f.wars[s.faction] === undefined)));
+      // 아는 나라의 고을로만 교역을 다닌다. 세상이 젊을수록 멀리 가지 않는다
+      const dests = w.settlements.filter(s => s.alive && s.id !== c.home && s.l === c.l && dist(s, c) < 24 * reachFactor(w)
+        && (s.faction === c.faction || (f && knows(w, f, s.faction) && (f.relations[s.faction] ?? 0) > -10 && f.wars[s.faction] === undefined)));
       const dest = dests.length ? rng.pick(dests) : undefined;
       if (dest && setTravel(w, c, dest, 'trade')) charLog(w, c, `교역품을 싣고 ${dest.name}(으)로 길을 나섰다.`);
       else { c.wealth += rng.float(2, 6); charLog(w, c, marketLine(w, c)); }
       break;
     }
     case 'adventure': {
-      const sites = w.sites.filter(s => (s.loot > 0 || s.relic) && s.kind !== 'deep' && approxDist(w, c, s) < 30);
+      // 세상이 젊을 때는 가까운 유적만 기웃거린다 (멀리 정찰·탐험을 다니는 것은 세월이 흐른 뒤)
+      const sites = w.sites.filter(s => (s.loot > 0 || s.relic) && s.kind !== 'deep' && approxDist(w, c, s) < 30 * reachFactor(w));
       if (sites.length) {
         const site = rng.pick(sites);
         if (setTravel(w, c, site, 'adventure', site.id)) { charLog(w, c, `${site.name}의 소문을 듣고 모험을 떠났다.`, 2); break; }

@@ -114,13 +114,17 @@ export interface Faction {
   history?: { t: number; text: string; imp: number }[];
   /** 지도자 교체 기록 */
   rulers: { id: number; from: number; to: number; how: string }[];
+  /** 알고 있는 세력과 알게 된 때 (없으면 예전 저장: 모두 안다) */
+  known?: Record<number, number>;
+  /** 누군가 만나 보았지만 아직 소식이 닿지 않은 세력 */
+  heard?: Record<number, number>;
   /** 다른 세력에게 품은 원한: 언제, 무엇 때문에 (전쟁의 명분이 된다) */
   grievances?: Record<number, { t: number; why: string }>;
 }
 
 export interface LogEntry { t: number; text: string; imp?: number }
 
-export type ActivityKind = 'idle' | 'travel' | 'army' | 'colonize' | 'party' | 'voyage' | 'fleet' | 'clear';
+export type ActivityKind = 'idle' | 'travel' | 'army' | 'colonize' | 'party' | 'voyage' | 'fleet' | 'clear' | 'caravan';
 export interface Activity {
   kind: ActivityKind;
   purpose?: 'adventure' | 'trade' | 'visit' | 'hunt' | 'return' | 'pilgrim' | 'duel' | 'flee' | 'clear' | 'muster';
@@ -173,6 +177,8 @@ export interface Character extends Pos {
   /** 용 전용: 둥지 / 수면 */
   lair?: Pos;
   sleep?: number;
+  /** 고향에 전할 소식: 길에서 처음 만난 세력들 */
+  carry?: number[];
   /** 보물 위의 긴 잠인가 (깰 때 포효한다) */
   deepSleep?: boolean;
   ancient?: boolean;

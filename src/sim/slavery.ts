@@ -1,4 +1,5 @@
 // 노예: 정착지의 노예 수, 사로잡기·거래·반란·해방
+import { learn } from './contact';
 import { relocate } from './characters';
 import { RACES, type RaceKey } from '../data/races';
 import { FOOD, GOLD } from '../data/terrain';
@@ -105,6 +106,9 @@ export function spawnFree(w: World, near: Settlement, race: RaceKey, pop: number
     const f = createFaction(w, race, makeClanName(rng, race));
     const s = foundSettlement(w, { faction: f.id, race, pos: { l: near.l, x, y }, pop });
     f.capital = s.id; f.baseName = s.name; f.name = factionName(f);
+    // 사슬을 끊고 나온 이들은 옛 주인을 잘 안다
+    const master = w.factions[near.faction];
+    if (master) { learn(w, f, master); learn(w, master, f); }
     f.flags.push('abolished');
     const R = RACES[race];
     const ld = leader ?? createCharacter(w, { race, faction: f.id, home: s.id, pos: s, born: w.t - (R.adult + rng.int(5, 20)) * 12 });

@@ -1,4 +1,5 @@
-import { sendCaravan } from './caravan';
+import { caravanMaster, sendCaravan } from './caravan';
+import { inheritKnown, knownYears, knows } from './contact';
 import { RACES, raceAffinity, type RaceKey } from '../data/races';
 import { markPeril } from './peril';
 import { seaRoute, seaThreatNear } from './sea';
@@ -37,6 +38,8 @@ export function createFaction(w: World, race: RaceKey, baseName: string, tier = 
     pop: 0, settlements: [], avgDev: 0, military: 0, dynasty: makeClanName(w.rngSim, race), rulers: [],
   };
   f.name = factionName(f);
+  // 새 세계(또는 조우를 쓰는 세계)의 세력은 아무도 모른 채로 태어난다
+  if (w.factions.length === 0 || w.factions.some(o => o.known)) f.known = {};
   w.factions.push(f);
   for (const o of w.factions) {
     if (o === f) continue;
@@ -173,6 +176,7 @@ export function splitFaction(w: World, f: Faction, rebel: Character, why: string
   const seat = take.find(s => s.governor === rebel.id) ?? take.sort((a, b) => b.pop - a.pop)[0];
   const nf = createFaction(w, f.race, seat.name, Math.max(0, Math.min(f.tier, take.length >= 3 ? 2 : 1)));
   nf.legitimacy = 40;
+  inheritKnown(w, nf, f);
   for (const s of take) transferSettlement(w, s, nf);
   nf.capital = seat.id;
   // 반란자 편에 선 인물들
@@ -251,6 +255,7 @@ export function attemptCoup(w: World, c: Character): void {
 export function secede(w: World, c: Character, s: Settlement): Faction {
   const f = w.factions[s.faction];
   const nf = createFaction(w, s.race, s.name, 1);
+  inheritKnown(w, nf, f);
   transferSettlement(w, s, nf);
   nf.capital = s.id;
   c.faction = nf.id; c.home = s.id;
@@ -444,6 +449,9 @@ const TRADE_REACH = 110;
 
 export function pWarMonth(w: World, a: Faction, b: Faction): number {
   if (a === b || !a.alive || !b.alive || atWar(a, b.id)) return 0;
+  // 모르는 세력과는 싸울 일도 없다
+  // 갓 알게 된 상대는 한동안 지켜본다
+  if (knownYears(w, a, b) < 1) return 0;
   if ((a.truce[b.id] ?? -1) > w.t) return 0;
   if (RACES[a.race].noPop || !a.settlements.length || !b.settlements.length) return 0;
   const r = facRel(a, b.id);
@@ -504,9 +512,19 @@ export function factionMonth(w: World, f: Faction): void {
     const route = tradeRoute(w, f, o);
     if (route.sea && (seaThreatNear(w, a) || seaThreatNear(w, b))) continue;
     const amt = Math.min(a.stock[t.give] * 0.06, 6 + a.pop / 150);
-    if (route.sea) { a.stock[t.give] -= amt; b.stock[t.give] += amt; }
-    // 뭍길은 반년마다 상단이 반년치 짐을 싣고 실제로 걸어간다 (길이 없으면 예전처럼 바로 넘긴다)
-    else if (w.t % 6 === (f.id + t.with) % 6 && sendCaravan(w, f, o, a, b, t.give, amt * 6, tradePath(w, f, o)) === 'nopath') { a.stock[t.give] -= amt * 6; b.stock[t.give] += amt * 6; }
+    // 교역에는 반드시 사람이 든다: 한 해에 한 번, 한 해치 짐을 싣고 떠난다
+    if (w.t % 12 === (f.id + t.with) % 12) {
+      const shipment = Math.min(a.stock[t.give] * 0.5, amt * 12);
+      if (route.sea) {
+        // 뱃길은 상인이 배를 빌려 띄운다 (배는 지도에 그리지 않는다)
+        const master = caravanMaster(w, f, a);
+        if (master) { a.stock[t.give] -= shipment; b.stock[t.give] += shipment; master.wealth += shipment * 0.03; charLog(w, master, `${RES_NAMES[t.give]}을(를) 배에 실어 ${o.name}(으)로 보냈다.`); }
+      } else {
+        const r = sendCaravan(w, f, o, a, b, t.give, shipment, tradePath(w, f, o));
+        // 걸어갈 길이 없는 교역(드문 경우)도 사람이 있어야 오간다
+        if (r === 'nopath' && caravanMaster(w, f, a)) { a.stock[t.give] -= shipment; b.stock[t.give] += shipment; }
+      }
+    }
     f.relations[o.id] = clamp((f.relations[o.id] ?? 0) + 0.15, -100, 100);
   }
   // 길이 끊긴 교역은 깨진다
@@ -548,7 +566,10 @@ export function factionMonth(w: World, f: Faction): void {
     const pPeace = Math.max(0, (f.warWeariness + e.warWeariness - 30) / 900) * (ld ? 0.5 + ld.traits[PRUDENCE] / 100 : 1)
       * (w.demonLord >= 0 && (w.chars[w.demonLord]?.faction === f.id || w.chars[w.demonLord]?.faction === e.id) ? 0.2 : 1);
     const treeHeld = w.worldTree?.alive && w.settlements[w.worldTree.sid]?.faction === e.id && f.race === 'elf';
-    if (!treeHeld && rng.chance(pPeace)) makePeace(w, f, e);
+    // 연맹이 맞서는 적(마왕 등)과는 연맹이 살아 있는 동안 따로 강화하지 않는다 (강화했다가 다음 달 다시 선포하는 일을 막는다)
+    const swornBy = (m: Faction, foe: Faction) => w.alliances.some(al => al.alive && al.members.includes(m.id) && w.chars[al.enemy]?.died < 0 && w.chars[al.enemy]?.faction === foe.id);
+    const sworn = swornBy(f, e) || swornBy(e, f);
+    if (!treeHeld && !sworn && rng.chance(pPeace)) makePeace(w, f, e);
   }
   if (!wars.length) f.warWeariness = Math.max(0, f.warWeariness - 1);
 
@@ -625,7 +646,8 @@ function assignGovernors(w: World, f: Faction): void {
 function tryTrade(w: World, f: Faction, need: number): boolean {
   const rng = w.rngSim;
   const surplus = (o: Faction, r: number) => stockMonths(w, o, r);
-  const partners = aliveFactions(w).filter(o => o !== f && !atWar(f, o.id) && facRel(f, o.id) > -15
+  // 서로 안 지 다섯 해는 지나야 믿고 물건을 주고받는다
+  const partners = aliveFactions(w).filter(o => o !== f && knownYears(w, f, o) >= 5 && knownYears(w, o, f) >= 5 && !atWar(f, o.id) && facRel(f, o.id) > -15
     && !f.treaties.some(t => t.with === o.id) && facDist(w, f, o) < 70 && surplus(o, need) > 8)
     .filter(o => tradeRoute(w, f, o).d <= TRADE_REACH);
   if (!partners.length) return false;
@@ -651,7 +673,7 @@ export function launchRaid(w: World, f: Faction): void {
   const targets = w.settlements.filter(s => {
     if (!s.alive || s.faction === f.id) return false;
     const o = w.factions[s.faction];
-    if (!o || (o.truce[f.id] ?? -1) > w.t) return false;
+    if (!o || (o.truce[f.id] ?? -1) > w.t || !knows(w, f, o)) return false;
     if (facRel(f, o.id) > 15 || f.treaties.some(t => t.with === o.id)) return false;
     return true;
   });

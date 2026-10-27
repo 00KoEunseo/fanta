@@ -11,6 +11,7 @@ import { SEAL_NAMES, brokenCount, omen, sealTotal, sealVisible } from '../sim/do
 import { seaThingsAt } from '../sim/sea';
 import { eraName } from '../sim/news';
 import { currentStories, storyIcon, storyYears } from '../sim/stories';
+import { knows } from '../sim/contact';
 import type { Caravan } from '../sim/caravan';
 import { capacity } from '../sim/settlements';
 import { ACHIEVEMENTS, TIER_COLORS, TIER_NAMES } from '../sim/achievements';
@@ -115,6 +116,7 @@ export function inspectChar(w: World, c: Character, secret: boolean): string {
   if (c.act.kind === 'fleet') { const f = w.sea.fleets[c.act.target ?? -1]; if (f) tags.push(`<span class="chip">⛵ ${esc(f.name)}</span>`); }
   if (c.officer) tags.push(`<span class="chip red">마왕군 간부 · ${esc(c.officer)}</span>`);
   if (c.act.kind === 'party') { const pt = w.parties.find(x => !x.done && x.members.includes(c.id)); if (pt) tags.push(`<span class="chip gold">${esc(pt.name)}</span>`); }
+  if (c.act.kind === 'caravan') { const k = w.caravans?.[c.act.target ?? -1]; if (k) tags.push(`<span class="chip gold">${esc(fixJosa(`상단을 이끌고 ${w.settlements[k.to]?.name ?? ''}(으)로`))}</span>`); }
   if (c.race === 'dragon') {
     const k = c.ancient ? '<span class="chip red">분노한 고대 용</span>' : c.dragonKind === 'raider' ? '<span class="chip red">습격형</span>'
       : c.dragonKind === 'patron' ? `<span class="chip gold">${esc(w.factions[c.patronOf ?? -1]?.name ?? '')}의 수호룡</span>` : '<span class="chip">은둔</span>';
@@ -123,7 +125,7 @@ export function inspectChar(w: World, c: Character, secret: boolean): string {
   }
   for (const it of c.items) tags.push(`<span class="chip">${esc(it)}</span>`);
   const where = c.act.kind === 'travel' ? `여행 중 (${{ adventure: '모험', trade: '교역', visit: '방문', hunt: '토벌', return: '귀환', pilgrim: '순례', duel: '결전', flee: '피난', clear: '개간지로', muster: '괴수 토벌 집결지로' }[c.act.purpose ?? 'visit']})`
-    : c.act.kind === 'clear' ? `${esc(w.settlements[c.act.target ?? -1]?.name ?? '')} 바깥의 땅을 개간하는 중` : c.act.kind === 'army' ? '출정 중' : c.act.kind === 'colonize' ? '이주 행렬 인솔 중' : (c.sleep ?? 0) > 0 ? `잠듦 (${c.sleep}개월)` : '머무는 중';
+    : c.act.kind === 'clear' ? `${esc(w.settlements[c.act.target ?? -1]?.name ?? '')} 바깥의 땅을 개간하는 중` : c.act.kind === 'army' ? '출정 중' : c.act.kind === 'colonize' ? '이주 행렬 인솔 중' : c.act.kind === 'caravan' ? '교역 중 (상단 인솔)' : (c.sleep ?? 0) > 0 ? `잠듦 (${c.sleep}개월)` : '머무는 중';
   const fam: string[] = [];
   if (c.father >= 0) fam.push(`부: ${charLink(w, w.chars[c.father], w.chars[c.father].name)}`);
   if (c.mother >= 0) fam.push(`모: ${charLink(w, w.chars[c.mother], w.chars[c.mother].name)}`);
@@ -210,7 +212,9 @@ export function inspectFaction(w: World, f: Faction): string {
   const ld = leaderOf(w, f);
   const ss = settlementsOf(w, f).sort((a, b) => b.pop - a.pop);
   const wars = Object.keys(f.wars).map(id => w.factions[+id]).filter(Boolean);
-  const rels = Object.entries(f.relations).map(([id, v]) => [w.factions[+id], v] as const).filter(([o]) => o && o.alive)
+  // 알고 있는 세력만 (아직 만나지 못한 세력은 이름도 모른다)
+  const unknown = w.factions.filter(o => o.alive && o !== f && !knows(w, f, o)).length;
+  const rels = Object.entries(f.relations).map(([id, v]) => [w.factions[+id], v] as const).filter(([o]) => o && o.alive && knows(w, f, o))
     .sort((a, b) => a[1] - b[1]);
   const rulers = f.rulers.slice().reverse().slice(0, 12);
   return `
@@ -235,7 +239,7 @@ export function inspectFaction(w: World, f: Faction): string {
     ${f.flags.length ? `<div class="chips" style="margin-top:4px">${f.flags.filter(x => !x.includes(':') && x !== 'food_crisis').map(x => `<span class="chip">${esc(FLAG_NAMES[x] ?? x)}</span>`).join('')}${f.flags.includes('food_crisis') ? '<span class="chip red">식량 위기</span>' : ''}</div>` : ''}
     <div class="sec">영토 (${ss.length})</div>
     <div>${ss.map(s => `${setLink(s)} <small>${RACES[s.race].settlementTiers[s.tier]} · ${fmtNum(s.pop)}</small>`).join('<br>')}</div>
-    <div class="sec">대외 관계</div>
+    <div class="sec">대외 관계${unknown ? ` <small class="dim">· 아직 만나지 못한 세력 ${unknown}곳</small>` : ''}</div>
     <div>${rels.slice(0, 4).map(([o, v]) => `${facLink(o)} <small style="color:var(--red)">${Math.round(v)}</small>`).join('<br>')}</div>
     <div>${rels.slice(-3).reverse().filter(([, v]) => v > 0).map(([o, v]) => `${facLink(o)} <small style="color:var(--green)">+${Math.round(v)}</small>`).join('<br>')}</div>
     ${(() => {
@@ -532,6 +536,7 @@ export function inspectCaravan(w: World, k: Caravan): string {
     <div class="kv">
       <span>출발</span><span>${setLink(from)}</span>
       <span>목적지</span><span>${setLink(to)} (${facLink(w.factions[k.partner])})</span>
+      <span>이끄는 이</span><span>${(k.crew ?? []).map(id => charLink(w, w.chars[id])).join(', ') || '없음'}</span>
       <span>짐</span><span>${RES_NAMES[k.res]} ${Math.round(k.amt)}</span>
       <span>길 위에서</span><span>${months}개월째${k.alive ? ` · 남은 길 약 ${left}개월` : ''}</span>
     </div>

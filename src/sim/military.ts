@@ -87,6 +87,8 @@ export function garrison(w: World, s: Settlement): number {
   if (f?.flags.includes('knights')) d *= 1.1;
   d *= RACE_FORTIFY[s.race] ?? 1;
   if (s.flags.includes('worldtree') || s.flags.includes('sanctum')) d *= 1.8;
+  // 다 자란 세계수는 뿌리와 가지로 그 고을을 감싼다
+  if (s.flags.includes('worldtree') && w.worldTree?.alive && w.worldTree.sid === s.id && w.worldTree.growth >= 100) d *= 1.4;
   // 천상의 성역은 천군과 열두 천사가 지킨다 (천사가 쓰러질수록 약해진다)
   if (s.flags.includes('sanctum')) {
     const angels = w.chars.filter(c => c.died < 0 && c.race === 'angel' && c.seat !== undefined);

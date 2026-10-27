@@ -29,17 +29,23 @@ export function worldTreeMonth(w: World): void {
     }
   } else if (T.felling) {
     T.hp -= 4;
+  } else if (T.growth >= 100) {
+    // 다 자란 세계수는 지키는 이에게 베푼다: 따로 돌볼 비용 없이 스스로 아물고, 마나와 열매를 내준다
+    T.hp = Math.min(100, T.hp + 0.6);
+    s.stock[MANA] += 4;
+    s.stock[FOOD] += 3;
+    s.stability = Math.min(100, s.stability + 0.3);
   } else if (s.stock[MANA] >= TREE_UPKEEP.mana && s.stock[FOOD] >= TREE_UPKEEP.food) {
+    // 심고 키우는 동안에만 손이 간다
     s.stock[MANA] -= TREE_UPKEEP.mana;
     s.stock[FOOD] -= TREE_UPKEEP.food;
     s.stock[WOOD] = Math.max(0, s.stock[WOOD] - TREE_UPKEEP.wood);
     T.hp = Math.min(100, T.hp + 0.6);
-    if (T.growth < 100) {
-      T.growth = Math.min(100, T.growth + 0.45);
-      if (T.growth >= 100) addNews(w, `${s.name}의 세계수가 마침내 하늘을 덮을 만큼 자랐다. 숲의 정령들이 돌아왔다.`, 4, 'hero', { pos: s, facs: f ? [f.id] : [] });
-    }
+    T.growth = Math.min(100, T.growth + 0.45);
+    if (T.growth >= 100) addNews(w, `${s.name}의 세계수가 마침내 하늘을 덮을 만큼 자랐다. 숲의 정령들이 돌아왔다. 이제 세계수가 그 땅을 지키고 먹일 것이다.`, 4, 'hero', { pos: s, facs: f ? [f.id] : [] });
   } else {
-    T.hp -= 1.2;
+    // 어린 나무를 돌볼 마나와 양식이 모자라면 자라지 못하고 조금씩 시든다
+    T.hp -= 0.4;
   }
   if (!dark && s.flags.includes('tree_burning')) {
     s.flags = s.flags.filter(x => x !== 'tree_burning');

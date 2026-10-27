@@ -1,4 +1,5 @@
 // 바다: 해저 유적과 보물, 먼 항해, 바다를 떠도는 유랑 선단, 바다 괴수, 그리고 심연의 군주
+import { knows } from './contact';
 import { dlSide, spared } from './clash';
 import { disasterStrikes } from './peril';
 import { RACES, type RaceKey } from '../data/races';
@@ -802,7 +803,7 @@ function askAlliance(w: World, caller: Faction, enemyName: string, near: Pos, al
   const rng = w.rngSim;
   const joined: Faction[] = [], refused: Faction[] = [];
   for (const o of aliveFactions(w)) {
-    if (o === caller || already.includes(o.id) || RACES[o.race].noPop || atWar(o, caller.id)) continue;
+    if (o === caller || already.includes(o.id) || RACES[o.race].noPop || atWar(o, caller.id) || !knows(w, o, caller)) continue;
     const d = Math.min(...o.settlements.map(id => w.settlements[id]).filter(s => s && s.alive && s.l === L).map(s => Math.hypot(s.x - near.x, s.y - near.y)), Infinity);
     if (d > 70) continue;
     const r = facRel(o, caller.id);

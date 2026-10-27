@@ -15,13 +15,18 @@ const deterministic = fp(seed) === fp(seed);
 
 const w = createWorld(seed);
 const all: NewsItem[] = [];
-let lastId = -1, worst = 0, doomAt = -1;
+let lastId = -1, worst = 0, doomAt = -1, carSum = 0, carN = 0;
+const firsts: Record<string, number> = {};
 const t0 = performance.now();
 for (let i = 0; i < years * 12; i++) {
   const a = performance.now();
   tick(w);
   worst = Math.max(worst, performance.now() - a);
-  for (let k = w.news.length - 1; k >= 0 && w.news[k].id > lastId; k--) all.push(w.news[k]);
+  for (let k = w.news.length - 1; k >= 0 && w.news[k].id > lastId; k--) {
+    const n = w.news[k]; all.push(n);
+    for (const [key, re] of [['contact', /처음으로 조우/], ['trade', /교역 협정을 맺었다/], ['war', /전쟁을 선포/]] as [string, RegExp][]) if (re.test(n.text)) firsts[key] = Math.min(firsts[key] ?? 1e9, Math.floor(n.t / 12));
+  }
+  if (i % 12 === 11) { carSum += (w.caravans ?? []).filter(k => k.alive).length; carN++; }
   lastId = w.nextNewsId - 1;
   if (w.doom.ended) { doomAt = yearOf(w); break; }
 }
@@ -77,6 +82,7 @@ console.log(JSON.stringify({
     imp4PerYear: +(hi.length / span).toFixed(2), imp5: imp5.length, imp5Repeats, top, hiTop },
   patternsPer100y: patterns,
   eras: { count: eras.length, unique: new Set(eras).size, names: eras },
+  early: { firstContact: firsts.contact ?? -1, firstTrade: firsts.trade ?? -1, firstWar: firsts.war ?? -1, caravansAvg: +(carSum / Math.max(1, carN)).toFixed(1) },
   world: { factionsEver: w.factions.length, factionsAlive: w.factions.filter(f => f.alive).length, charsAlive: living.length,
     pop: Math.round(w.factions.filter(f => f.alive).reduce((a, f) => a + f.pop, 0)), deaths: deaths.length,
     sites: (w.sites ?? []).length, sitesDepleted: (w.sites ?? []).filter(s => s.loot <= 0).length,

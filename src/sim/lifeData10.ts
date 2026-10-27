@@ -1,6 +1,7 @@
 // 인생 이벤트 데이터 10: 다스리는 이의 나날, 쓰러진 몸, 마지막 말.
 // 왕좌에 오른 이는 더 이상 던전을 헤매지 않는다. 대신 영주의 반심, 빈 곳간, 후계를 둘러싼 눈치싸움을 마주한다.
 // 크게 다친 몸은 한 번에 무너지지 않는다. 쓰러졌다가 일어나거나, 두 번째 상처에 무너진다.
+import { knows } from './contact';
 import type { Character, Settlement } from './state';
 import { AMBITION, PRUDENCE } from '../data/traits';
 import { FOOD, GOLD, ORE } from '../data/terrain';
@@ -74,7 +75,7 @@ export const RULE: LifeEv[] = [
 function envoyFrom(x: Ctx) {
   const f = x.f;
   if (!f) return null;
-  return x.w.factions.filter(o2 => o2.alive && o2 !== f && f.wars[o2.id] === undefined && (f.relations[o2.id] ?? 0) > -10 && !f.treaties.some(t => t.with === o2.id))
+  return x.w.factions.filter(o2 => o2.alive && o2 !== f && knows(x.w, f, o2) && f.wars[o2.id] === undefined && (f.relations[o2.id] ?? 0) > -10 && !f.treaties.some(t => t.with === o2.id))
     .sort((a, b) => (f.relations[b.id] ?? 0) - (f.relations[a.id] ?? 0))[0] ?? null;
 }
 

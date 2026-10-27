@@ -1,4 +1,5 @@
 import { RACES, type RaceKey, POP_RACES, L_SURFACE, L_SKY } from '../data/races';
+import { knows } from './contact';
 import { dragonSpat } from './clash';
 import { fertile as fertileC, relocate } from './characters';
 import { disasterStrikes } from './peril';
@@ -244,7 +245,7 @@ ev({
     if (!ld) return;
     const kids = ld.children.map(i => w.chars[i]).filter(k => k && k.died < 0 && k.spouse < 0 && isAdult(w, k) && fertileC(w, k) && !k.isPlayer && k.act.kind === 'idle');
     if (!kids.length) return;
-    const others = aliveFactions(w).filter(o => o !== f && o.race === f.race && facRel(f, o.id) > 0 && !o.wars[f.id]);
+    const others = aliveFactions(w).filter(o => o !== f && o.race === f.race && knows(w, f, o) && facRel(f, o.id) > 0 && !o.wars[f.id]);
     for (const o of rng.shuffle(others)) {
       const ol = leaderOf(w, o);
       if (!ol) continue;
@@ -527,7 +528,7 @@ ev({
     setTimedFlag(f, 'waaagh', w.t + 24);
     const ld = leaderOf(w, f);
     // 같은 종족의 약한 세력을 흡수
-    const absorb = aliveFactions(w).filter(o => o !== f && (o.race === 'orc' || o.race === 'goblin') && o.military < f.military * 0.7 && facDist(w, f, o) < 50 && !f.wars[o.id]);
+    const absorb = aliveFactions(w).filter(o => o !== f && knows(w, f, o) && (o.race === 'orc' || o.race === 'goblin') && o.military < f.military * 0.7 && facDist(w, f, o) < 50 && !f.wars[o.id]);
     for (const o of absorb.slice(0, 2)) {
       for (const sid of [...o.settlements]) transferSettlement(w, w.settlements[sid], f);
       for (const c of w.chars) if (c.died < 0 && c.faction === o.id) c.faction = f.id;

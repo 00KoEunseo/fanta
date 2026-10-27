@@ -64,7 +64,7 @@ export function addNews(
   }
   // 세력의 일대기: 아주 중요한 사건만 남긴다
   const major = baseImp >= 5 || (baseImp === 4 && !/도전하였다|강화를 맺고/.test(text))
-    || (baseImp === 3 && /즉위|거듭났|추대|격하|멸망|독립|폐지|바벨탑|탑을 쌓|해방|왕조가 끝나고/.test(text));
+    || (baseImp === 3 && /즉위|거듭났|추대|격하|멸망|독립|폐지|바벨탑|탑을 쌓|해방|왕조가 끝나고|처음으로 조우/.test(text));
   if (opts.facs && major) {
     for (const id of new Set(opts.facs)) {
       const f = w.factions[id];

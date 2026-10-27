@@ -1,4 +1,5 @@
 import { RACES, type RaceKey } from '../data/races';
+import { knows } from './contact';
 import { makeName } from '../data/names';
 import { ADVENTURER_TIRED, JOB_SEARCH, buildPrompt, makeCtx, nearDeath, resolveLife, type LifeEv } from './life';
 import { CHILD, RACIAL, ROMANCE, TRAIT } from './lifeData1';
@@ -289,7 +290,7 @@ LIFE.push({
   cond: (w, c) => w.factions[c.faction]?.leader === c.id,
   build: (w, c) => {
     const f = w.factions[c.faction];
-    const enemies = aliveFactions(w).filter(o => o !== f && !f.wars[o.id] && facDist(w, f, o) < 70 && (f.truce[o.id] ?? -1) <= w.t);
+    const enemies = aliveFactions(w).filter(o => o !== f && knows(w, f, o) && !f.wars[o.id] && facDist(w, f, o) < 70 && (f.truce[o.id] ?? -1) <= w.t);
     enemies.sort((a, b) => facRel(f, a.id) - facRel(f, b.id));
     const e = enemies[0];
     const choices = [
