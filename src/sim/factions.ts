@@ -329,6 +329,13 @@ export function tierUp(w: World, f: Faction): void {
 
 // ───────────── 외교 / 전쟁
 
+/** 원한을 새긴다: 훗날 전쟁의 명분으로 꺼내 든다 */
+export function aggrieve(w: World, victim: Faction | undefined, culprit: Faction | undefined, why: string): void {
+  if (!victim || !culprit || victim === culprit || !victim.alive) return;
+  victim.grievances ??= {};
+  victim.grievances[culprit.id] = { t: w.t, why };
+}
+
 export function declareWar(w: World, a: Faction, b: Faction, silent = false): void {
   if (a.wars[b.id] !== undefined || a === b) return;
   if (!Object.keys(a.wars).length) a.warWeariness = 0;
@@ -343,18 +350,35 @@ export function declareWar(w: World, a: Faction, b: Faction, silent = false): vo
   addNews(w, `${a.name}이(가) ${b.name}에 전쟁을 선포하였다. ${why}`, a.tier >= 2 || b.tier >= 2 ? 4 : 3, 'war', { facs: [a.id, b.id], chars: ld ? [ld.id] : [] });
 }
 
+/** 전쟁의 명분: 실제로 있었던 일(빼앗긴 고을, 약탈, 암살의 배후)을 먼저 꺼내고, 없으면 군주의 성정과 형편에서 찾는다.
+ *  같은 군주가 늘 같은 말을 하지 않도록 말투를 돌려 쓴다 (난수를 쓰지 않고 날짜와 세력 번호로 고른다) */
 function warReason(w: World, a: Faction, b: Faction, ld: Character): string {
   const t = ld.traits;
-  if (w.demonLord === ld.id) return '마왕은 모든 빛의 종족을 멸하라 명하였다.';
-  if (a.flags.includes('food_crisis')) return `굶주린 백성들이 ${b.name}의 곡창을 노렸다.`;
-  if (t[PRIDE] > 70) return `${ld.name}은(는) 모욕을 결코 잊지 않았다.`;
-  if (t[AMBITION] > 70) return `${ld.name}의 야망은 국경 안에 머물지 않았다.`;
-  if (t[COMPASSION] < 30) return `${ld.name}은(는) 피를 원하였다.`;
-  if (raceAffinity(a.race, b.race) < -40) return `${RACES[a.race].name}과(와) ${RACES[b.race].name}의 오랜 원한이 다시 불붙었다.`;
-  return '국경의 분쟁이 끝내 전쟁으로 번졌다.';
+  const pick = (arr: string[]) => arr[(w.t + a.id * 7 + b.id * 13) % arr.length];
+  if (w.demonLord === ld.id) return pick(['마왕은 모든 빛의 종족을 멸하라 명하였다.', '마왕의 군기가 다시 펄럭였다. 어둠은 쉬지 않는다.', `마왕 ${ld.name}은(는) 무릎 꿇지 않은 땅을 용서하지 않았다.`]);
+  const g = a.grievances?.[b.id];
+  if (g && w.t - g.t < 360) {
+    const yrs = Math.floor((w.t - g.t) / 12);
+    const when = yrs < 1 ? '얼마 전' : yrs < 3 ? '지난날' : `${yrs}년 전`;
+    return pick([`${when} ${g.why}의 원한을 갚을 때가 왔다.`, `${ld.name}은(는) ${when} ${g.why}을(를) 잊지 않았다.`, `${g.why}의 기억이 아직 생생하였다. 복수의 북이 울렸다.`]);
+  }
+  // 해당하는 명분을 모두 모은 뒤 그중 하나를 고른다 (한 가지 명분이 모든 전쟁을 차지하지 않도록)
+  const why: string[] = [];
+  if (a.flags.includes('food_crisis')) why.push(`굶주린 백성들이 ${b.name}의 곡창을 노렸다.`, '곳간이 비자 칼끝이 이웃의 들판을 향하였다.');
+  if (Object.keys(b.wars).length >= 2) why.push(`사방에서 공격받는 ${b.name}을(를) 칠 절호의 기회라 여겼다.`, `${b.name}이(가) 여러 적과 싸우는 틈을 노렸다.`);
+  if (t[PRIDE] > 70) why.push(`${ld.name}은(는) 모욕을 결코 잊지 않았다.`, `${b.name}의 사신이 무례하였다. ${ld.name}은(는) 그 자리에서 칼을 뽑았다.`, `${ld.name}은(는) 자존심에 난 상처를 피로 씻으려 하였다.`);
+  if (t[AMBITION] > 70) why.push(`${ld.name}의 야망은 국경 안에 머물지 않았다.`, `${ld.name}은(는) 지도 위의 ${b.name}을(를) 오래 노려보았다.`, `더 넓은 땅을 원한 ${ld.name}이(가) 마침내 움직였다.`);
+  if (t[COMPASSION] < 30) why.push(`${ld.name}은(는) 피를 원하였다.`, `${ld.name}에게 전쟁은 사냥과 다르지 않았다.`, `잔혹한 ${ld.name}은(는) 명분조차 꾸미지 않았다.`);
+  if (a.military > b.military * 2) why.push('약한 이웃의 땅이 탐났다.', `${b.name}의 군세가 보잘것없다는 보고가 올라왔다.`);
+  const al = RACES[a.race].align, bl = RACES[b.race].align;
+  if (al !== 'neutral' && bl !== 'neutral' && al !== bl) why.push('빛과 어둠은 한 하늘을 이고 살 수 없었다.', `${RACES[a.race].name}의 사제들이 성전을 부르짖었다.`);
+  if (raceAffinity(a.race, b.race) < -40) why.push(`${RACES[a.race].name}과(와) ${RACES[b.race].name}의 오랜 원한이 다시 불붙었다.`, `${RACES[a.race].name}의 노래는 ${RACES[b.race].name}을(를) 원수로 기억한다.`);
+  if (!why.length || Object.keys(a.wars).length === 0) why.push('국경의 분쟁이 끝내 전쟁으로 번졌다.', '국경 마을의 우물 하나를 두고 시작된 다툼이 전쟁이 되었다.', '변경의 소규모 충돌이 걷잡을 수 없이 커졌다.', '사냥터를 두고 벌어진 시비가 피를 불렀다.');
+  return pick(why);
 }
 
 export function makePeace(w: World, a: Faction, b: Faction): void {
+  const began = a.wars[b.id] ?? w.t;
   delete a.wars[b.id]; delete b.wars[a.id];
   const until = w.t + w.rngSim.int(60, 150);
   a.truce[b.id] = until; b.truce[a.id] = until;
@@ -366,7 +390,14 @@ export function makePeace(w: World, a: Faction, b: Faction): void {
       if (ar.goal === 'conquer' || ar.goal === 'raid') ar.goal = 'return';
     }
   }
-  addNews(w, `${a.name}과(와) ${b.name}이(가) 강화를 맺고 전쟁을 끝냈다.`, 3, 'war', { facs: [a.id, b.id] });
+  // 전쟁의 길이와 형편에 따라 끝맺음의 말이 다르다 (난수 없이 고른다)
+  const yrs = Math.floor((w.t - began) / 12);
+  const pick = (arr: string[]) => arr[(w.t + a.id + b.id) % arr.length];
+  const tail = yrs >= 10 ? pick([`${yrs}년을 끈 싸움이었다.`, `${yrs}년 만에 국경에 다시 연기가 걷혔다.`, `한 세대를 삼킨 ${yrs}년의 전쟁이었다.`])
+    : yrs < 1 ? pick(['칼을 뽑은 지 한 해도 되지 않아서였다.', '싸움은 짧았다.'])
+    : Math.max(a.warWeariness, b.warWeariness) > 50 ? pick(['양쪽 모두 지쳐 있었다.', '과부와 고아만 늘어난 싸움이었다.', '곳간도 병사도 바닥이 나 있었다.'])
+    : pick(['사신들이 오가며 국경을 다시 그었다.', '인질을 주고받고 맹세를 새겼다.', '변경의 성채 몇 곳이 주인을 바꾸었다.', '']);
+  addNews(w, `${a.name}과(와) ${b.name}이(가) 강화를 맺고 전쟁을 끝냈다.${tail ? ' ' + tail : ''}`, 3, 'war', { facs: [a.id, b.id] });
 }
 
 const distCache = new WeakMap<World, { t: number; m: Map<string, number> }>();
@@ -423,9 +454,10 @@ export function pWarMonth(w: World, a: Faction, b: Faction): number {
   if (!isFinite(d)) return 0;
   const distF = d < 30 ? 1 : Math.exp(-(d - 30) / 20);
   const warsF = 1 / (1 + Object.keys(a.wars).length * 1.5);
+  const pile = special === 1 ? Math.pow(0.7, Object.keys(b.wars).length) : 1;
   const hunger = a.flags.includes('food_crisis') ? 1.6 : 1;
   const young = a.tier === 0 ? 0.4 : 1;
-  const p = (Math.max(5, -r - 30) / 70) * Math.max(0.05, aggr) * powerF * distF * warsF * hunger * special * young * 0.008;
+  const p = (Math.max(5, -r - 30) / 70) * Math.max(0.05, aggr) * powerF * distF * warsF * pile * hunger * special * young * 0.008;
   return Math.min(0.05, p);
 }
 

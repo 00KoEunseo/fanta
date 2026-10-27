@@ -16,7 +16,7 @@ import {
   addFacRel, addRel, aliveFactions, approxDist, charLabel, clamp, facRel, isAdult, isHero, leaderOf, settlementsOf,
 } from './helpers';
 import { awaken, createCharacter, duel, killChar } from './characters';
-import { createFaction, crown, declareWar, facDist, factionName, invalidateDist, launchAttack, makePeace, secede, transferSettlement } from './factions';
+import { aggrieve, createFaction, crown, declareWar, facDist, factionName, invalidateDist, launchAttack, makePeace, secede, transferSettlement } from './factions';
 import { foundSettlement, hasFlag, setTimedFlag, findColonySite } from './settlements';
 import { brokenCount } from './doom';
 import { seatHolder } from './angels';
@@ -276,10 +276,11 @@ ev({
     const by = enemies.length ? w.rngSim.pick(enemies) : null;
     if (w.rngSim.chance(w.demonLord === ld.id ? 0.93 : 0.5 + ld.traits[8] / 300)) {
       addNews(w, `${f.name}의 ${charLabel(w, ld)}을(를) 노린 암살 시도가 있었으나 실패하였다.${by ? ` 배후에는 ${by.name}이(가) 있다는 소문이다.` : ''}`, 3, 'politics', { facs: [f.id], chars: [ld.id] });
-      if (by) addFacRel(w, f, by, -20);
+      if (by) { addFacRel(w, f, by, -20); aggrieve(w, f, by, `${ld.name}을(를) 노린 암살 시도`); }
       return;
     }
     addNews(w, `${f.name}의 ${charLabel(w, ld)}이(가) 암살자의 독검에 쓰러졌다.${by ? ` 배후로 ${by.name}이(가) 지목되었다.` : ''}`, 4, 'politics', { facs: [f.id], chars: [ld.id] });
+    aggrieve(w, f, by ?? undefined, `선왕 ${ld.name}이(가) 암살당한 일`);
     killChar(w, ld, '암살');
   },
 });
@@ -384,8 +385,12 @@ ev({
     const opened = closed.slice(0, rng.int(2, 3));
     for (const p of opened) p.open = true;
     rebuildPortalLinks(w); invalidateDist(w);
-    addNews(w, `【차원의 합】 수백 년에 한 번, 마계와 이 세계가 겹치는 때가 왔다. 하늘이 보랏빛으로 물들고 ${opened.map(p => `'${p.name}'`).join(', ')}이(가) 한꺼번에 열렸다. 현자들은 앞으로 ${years}년 동안 문을 닫기 어려울 것이라 경고하였다.`,
-      5, 'dark', { pos: opened[0]?.a });
+    const nth = w.stats.riftSurges;
+    const gates = `${opened.map(p => `'${p.name}'`).join(', ')}이(가) 한꺼번에 열렸다`;
+    addNews(w, nth <= 1
+      ? `【차원의 합】 마계와 이 세계가 겹치는 때가 왔다. 하늘이 보랏빛으로 물들고 ${gates}. 현자들은 앞으로 ${years}년 동안 문을 닫기 어려울 것이라 경고하였다.`
+      : `【차원의 합】 또다시 두 세계가 겹쳤다. 이 세계에서 ${nth}번째다. 보랏빛 하늘 아래 ${gates}. 문은 ${years}년쯤 닫히지 않을 것이다.`,
+      nth <= 1 ? 5 : 4, 'dark', { pos: opened[0]?.a });
   },
   forecast: () => ({ text: '마계와 이 세계가 겹친다 (차원의 합)', imp: 5, cat: 'dark' }),
 });
@@ -561,6 +566,9 @@ ev({
   p: (w, f: Faction) => {
     if (f.race !== 'angel' || w.demonLord < 0) return 0;
     const dl = w.chars[w.demonLord];
+    // 같은 마왕에게 성전을 선포하는 것은 3년에 한 번까지
+    const last = w.stats[`crusade${dl?.id}`];
+    if (last !== undefined && w.t - last < 36) return 0;
     return dl && !f.wars[dl.faction] && knowsDL(w, f) ? 0.05 : 0;
   },
   fire: (w, f: Faction) => {
@@ -568,7 +576,9 @@ ev({
     const e = w.factions[dl.faction];
     if (!e || !e.alive) return;
     declareWar(w, f, e, true);
-    addNews(w, `${f.name}의 천군이 하늘의 계단을 내려왔다. 마왕 ${dl.name}을(를) 향한 성전이 선포되었다.`, 4, 'hero', { facs: [f.id, e.id] });
+    const again = w.stats[`crusade${dl.id}`] !== undefined;
+    w.stats[`crusade${dl.id}`] = w.t;
+    addNews(w, again ? `${f.name}의 천군이 다시 칼을 뽑았다. 마왕 ${dl.name}과(와)의 싸움은 끝나지 않았다.` : `${f.name}의 천군이 하늘의 계단을 내려왔다. 마왕 ${dl.name}을(를) 향한 성전이 선포되었다.`, again ? 3 : 4, 'hero', { facs: [f.id, e.id] });
     launchAttack(w, f, e, 'holywar');
   },
 });

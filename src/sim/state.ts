@@ -75,6 +75,8 @@ export interface Settlement extends Pos {
   flags: string[];
   /** 마지막으로 공격당한 시점 */
   lastAttacked: number;
+  /** 용에게 마지막으로 불탄 때 */
+  lastBurned?: number;
 }
 
 export interface Treaty { with: number; give: number; get: number; since: number }
@@ -112,6 +114,8 @@ export interface Faction {
   history?: { t: number; text: string; imp: number }[];
   /** 지도자 교체 기록 */
   rulers: { id: number; from: number; to: number; how: string }[];
+  /** 다른 세력에게 품은 원한: 언제, 무엇 때문에 (전쟁의 명분이 된다) */
+  grievances?: Record<number, { t: number; why: string }>;
 }
 
 export interface LogEntry { t: number; text: string; imp?: number }
@@ -169,6 +173,8 @@ export interface Character extends Pos {
   /** 용 전용: 둥지 / 수면 */
   lair?: Pos;
   sleep?: number;
+  /** 보물 위의 긴 잠인가 (깰 때 포효한다) */
+  deepSleep?: boolean;
   ancient?: boolean;
   /** 속한 가문 */
   house?: number;

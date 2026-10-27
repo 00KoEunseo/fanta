@@ -379,7 +379,11 @@ export function killChar(w: World, c: Character, cause: string, killer?: Charact
   if (notable && w.demonLord !== c.id) {
     const imp = f && f.leader === c.id ? 4 : c.isPlayer ? 3 : c.fame >= 80 || isHero(c) ? 3 : 2;
     const label = (f && f.leader === c.id ? `${f.name}의 ` : '') + label0;
-    addNews(w, `${label}이(가) ${c.race === 'dragon' || undead ? '' : `${age}세의 나이에 `}${cause}(으)로 ${undead ? '영영 스러졌다' : '세상을 떠났다'}.`, imp, killer ? 'war' : 'life', { pos: c, chars: [c.id], facs: f ? [f.id] : [] });
+    const shortLived = RACES[c.race].lifespan[0] < 70;
+    const text = cause === '노환' && !undead && c.race !== 'dragon'
+      ? (shortLived ? `${label}이(가) 천수를 다하고 눈을 감았다.` : `${label}이(가) ${age}세로 천수를 다하고 세상을 떠났다.`)
+      : `${label}이(가) ${c.race === 'dragon' || undead ? '' : `${age}세의 나이에 `}${cause}(으)로 ${undead ? '영영 스러졌다' : '세상을 떠났다'}.`;
+    addNews(w, text, imp, killer ? 'war' : 'life', { pos: c, chars: [c.id], facs: f ? [f.id] : [] });
   }
 }
 
@@ -1011,7 +1015,8 @@ function dragonMonth(w: World, c: Character): void {
       if (c.lair && c.died < 0) setTravel(w, c, c.lair, 'return');
       const raider = c.dragonKind === 'raider' || c.ancient;
       const rage = rageOf(w, c);
-      c.sleep = c.ancient ? (rage > 0.5 ? rng.int(0, 1) : rng.int(2, 10 + Math.round((1 - rage) * 20))) : rng.int(raider ? 4 : 18, raider ? 24 : 90);
+      // 배를 채운 용은 둥지에서 쉰다. 분노가 클수록 짧게 쉬지만, 쉬지 않고 날아다니지는 않는다
+      c.sleep = c.ancient ? (rage > 0.5 ? rng.int(2, 5) : rng.int(6, 18 + Math.round((1 - rage) * 30))) : rng.int(raider ? 4 : 18, raider ? 24 : 90);
     } else if (A.purpose === 'return' && c.lair && c.l === c.lair.l && Math.hypot(c.x - c.lair.x, c.y - c.lair.y) < 3) setPos(c, c.lair);
     return;
   }
@@ -1026,7 +1031,8 @@ function dragonMonth(w: World, c: Character): void {
   if ((c.sleep ?? 0) > 0) {
     c.sleep!--;
     if (c.sleep! % 24 === 0) charLog(w, c, '둥지에서 깊은 잠에 빠져 있다.');
-    if (c.sleep === 0) charLog(w, c, '긴 잠에서 깨어나 하늘을 향해 포효하였다.', 2);
+    // 보물 위의 긴 잠에서 깰 때만 포효한다 (습격 뒤의 짧은 휴식은 조용히 지나간다)
+    if (c.sleep === 0 && c.deepSleep) { c.deepSleep = false; charLog(w, c, '긴 잠에서 깨어나 하늘을 향해 포효하였다.', 2); }
     return;
   }
   c.stats.health = clamp(c.stats.health + 3);
@@ -1036,16 +1042,19 @@ function dragonMonth(w: World, c: Character): void {
   if (rng.chance(c.ancient ? rate : rate * hunger)) {
     const range = c.ancient ? 70 + rage * 80 : c.dragonKind === 'raider' ? 50 : 35;
     const targets = w.settlements.filter(s => s.alive && s.faction !== c.patronOf && approxDist(w, c, s, true) < range && s.pop > 30);
+    // 막 불탄 고을은 잿더미뿐이라 한동안 노릴 것이 없다
+    const burnt = (t: Settlement) => (t.lastBurned !== undefined && w.t - t.lastBurned < 48 ? 0.1 : 1);
     if (targets.length) {
       // 분노한 고대 용은 보이는 대로, 가까운 곳부터 덮친다
       const s = c.ancient && rage > 0.3
-        ? rng.weighted(targets, t => 1 / (1 + approxDist(w, c, t, true)) ** 2 * (t.pop + 50))!
-        : rng.weighted(targets, t => t.stock[5] + t.pop * 0.1 + 10)!;
+        ? rng.weighted(targets, t => 1 / (1 + approxDist(w, c, t, true)) ** 2 * (t.pop + 50) * burnt(t))!
+        : rng.weighted(targets, t => (t.stock[5] + t.pop * 0.1 + 10) * burnt(t))!;
       if (setTravel(w, c, s, 'hunt', s.id)) { charLog(w, c, `${s.name}의 보물 냄새를 맡고 날아올랐다.`, 2); return; }
     }
   }
   if (rng.chance(c.ancient ? 0.02 : c.dragonKind === 'raider' ? 0.03 : 0.08)) {
     c.sleep = rng.int(12, c.dragonKind === 'raider' ? 36 : 120);
+    c.deepSleep = true;
     charLog(w, c, '보물 더미 위에서 긴 잠에 들었다.', 1);
   } else if (rng.chance(0.3)) charLog(w, c, rng.pick(['둥지 위를 맴돌았다.', '보물을 세며 흡족해하였다.', '먼 산맥 너머를 노려보았다.']));
 }
@@ -1068,6 +1077,7 @@ export function dragonRaid(w: World, c: Character, s: Settlement): void {
   s.dev = Math.max(0, s.dev - rng.float(2, 7));
   s.stability = clamp(s.stability - 15);
   s.lastAttacked = w.t;
+  s.lastBurned = w.t;
   c.wealth += gold; c.fame += 10;
   addNews(w, tpl('{d:이} {s:을} 불태웠다. {n}명이 목숨을 잃고 금고가 텅 비었다.', { d: charLabel(w, c), s: s.name, n: killed }), c.ancient ? 4 : 3, 'dark',
     { pos: s, chars: [c.id], facs: f ? [f.id] : [] });

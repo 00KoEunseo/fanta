@@ -312,7 +312,7 @@ export function chronicleTab(w: World): string {
   const byId = new Map(w.news.map(n => [n.id, n]));
   return w.eras.slice().reverse().map((e, ri) => {
     const idx = w.eras.length - 1 - ri;
-    const name = e.end < 0 ? `${eraName(e, idx)} <small>(진행 중)</small>` : esc(e.name);
+    const name = e.end < 0 ? `${eraName(w, e, idx)} <small>(진행 중)</small>` : esc(e.name);
     const hl = e.highlights.map(id => byId.get(id)).filter((n): n is NewsItem => !!n).slice(-14).reverse();
     return `<div class="era"><h4>${name} <small>${dateStr(w, e.start)} ~ ${e.end >= 0 ? dateStr(w, e.end) : ''}</small></h4>
       ${hl.map(n => newsItemHTML(w, n)).join('') || '<div class="dim">기록할 만한 일이 아직 없다.</div>'}</div>`;

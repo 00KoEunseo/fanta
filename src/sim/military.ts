@@ -12,7 +12,7 @@ import { MOVE_FLY, MOVE_WALK, advance, findPath, posOf } from './path';
 import type { Army, ArmyGoal, Character, Faction, Pos, Settlement, World } from './state';
 import { addFacRel, charLabel, clamp, isAdult, leaderOf, rel, charPower } from './helpers';
 import { awaken, killChar, setPos } from './characters';
-import { fallFaction, invalidateDist, transferSettlement } from './factions';
+import { aggrieve, fallFaction, invalidateDist, transferSettlement } from './factions';
 import { foundSettlement, hasFlag } from './settlements';
 import { allowsSlavery, enslaveChar, takeSlaves } from './slavery';
 
@@ -204,6 +204,7 @@ function arrive(w: World, a: Army): void {
       for (const r of [FOOD, GOLD, ORE]) { const take = s.stock[r] * 0.45; s.stock[r] -= take; a.loot[r] += take; }
       s.stability = clamp(s.stability - 12);
       if (def) addFacRel(w, f, def, -15);
+      aggrieve(w, def, f, `${s.name}이(가) 약탈당한 일`);
       let captives = 0;
       if (allowsSlavery(w, f)) {
         captives = Math.round(s.pop * rng.float(0.02, 0.06));
@@ -223,6 +224,7 @@ function arrive(w: World, a: Army): void {
       goHomeArmy(w, a);
     } else {
       const cap = def && def.capital === s.id;
+      aggrieve(w, def, f, `${s.name}을(를) 빼앗긴 일`);
       addNews(w, `${cmd ? charLabel(w, cmd) + '이(가) 이끄는 ' : ''}${f.name}의 군대가 ${s.name}을(를) 함락하였다. (${atk} 대 ${defN})`, cap ? 4 : 3, 'war',
         { pos: s, facs: [f.id, s.faction], chars: cmd ? [cmd.id] : [] });
       if (cmd && cmd.died < 0) {
