@@ -1,0 +1,14 @@
+import { createWorld } from '../src/sim/world';
+import { tick } from '../src/sim/tick';
+import { becomeDemonLord } from '../src/sim/events';
+import { RACES } from '../src/data/races';
+import { dateStr } from '../src/sim/state';
+const w = createWorld('NEWS-1');
+for (let i = 0; i < 12 * 30; i++) tick(w);
+const f = w.factions.filter(f => f.alive && RACES[f.race].align === 'dark' && f.settlements.length).sort((a, b) => b.pop - a.pop)[0];
+becomeDemonLord(w, f);
+const t0 = w.t;
+console.log('강림:', f.name, 'L' + w.settlements[f.capital].l, '세력 수', w.factions.filter(f => f.alive).length);
+for (let i = 0; i < 12 * 8 && w.demonLord >= 0; i++) tick(w);
+for (const n of w.news.filter(n => n.t >= t0 && /강림 소식|연맹|토벌대를 꾸렸|성전|깃발 아래/.test(n.text)).slice(0, 25)) console.log(`+${n.t - t0}개월`, n.text.slice(0, 110));
+console.log('8년 뒤 아는 세력', w.factions.filter(x => x.alive && x.flags.includes('dlknown')).length, '/', w.factions.filter(x => x.alive).length);

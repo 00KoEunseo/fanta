@@ -1,0 +1,13 @@
+import { createWorld } from '../src/sim/world';
+import { tick } from '../src/sim/tick';
+import { startTower, collapse } from '../src/sim/towers';
+const w = createWorld('A1');
+for (let i = 0; i < 12 * 20; i++) tick(w);
+const f = w.factions.filter(f => f.alive && f.settlements.some(id => w.settlements[id].l === 2)).sort((a, b) => b.pop - a.pop)[0];
+const t1 = startTower(w, f)!;
+t1.progress = 150;
+console.log('첫 탑', t1.name, `(${t1.x},${t1.y})`, '높이', t1.progress);
+collapse(w, t1, `${t1.name}이(가) 무너졌다.`, 3);
+const t2 = startTower(w, f)!;
+console.log('다시 세움', t2.name, `(${t2.x},${t2.y})`, '같은 탑?', t1 === t2, '높이', t2.progress, '체력', t2.hp, '탑 수', w.towers.length);
+console.log(w.news.slice(-2).map(n => n.text).join('\n'));

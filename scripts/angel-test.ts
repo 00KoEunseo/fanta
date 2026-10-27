@@ -1,0 +1,16 @@
+import { createWorld } from '../src/sim/world';
+import { tick } from '../src/sim/tick';
+import { killChar } from '../src/sim/characters';
+import { seatHolder } from '../src/sim/angels';
+const w = createWorld('OAK-ROSE-42');
+for (let i = 0; i < 12; i++) tick(w);
+const a = seatHolder(w, 3)!;
+const killer = w.chars.find(c => c.died < 0 && c.race === 'orc')!;
+console.log('죽기 전 계시의 천사', a.name, a.stats.might, a.stats.magic);
+killChar(w, a, '결투', killer);
+console.log('직후 천사 수', w.chars.filter(c => c.died < 0 && c.race === 'angel').length, '자리3', seatHolder(w, 3)?.name ?? '빔');
+for (let i = 0; i < 12 * 99; i++) tick(w);
+console.log('99년 뒤 자리3', seatHolder(w, 3)?.name ?? '빔');
+for (let i = 0; i < 14; i++) tick(w);
+const n = seatHolder(w, 3);
+console.log('100년 뒤 자리3', n?.name ?? '빔', n?.stats.might, n?.stats.magic, '천사 수', w.chars.filter(c => c.died < 0 && c.race === 'angel').length);

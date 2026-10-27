@@ -1,0 +1,193 @@
+// 인생 이벤트 데이터 1: 유년기 · 청년기 · 연애/가정 · 성향 · 종족
+import { isAdult } from './helpers';
+import { kin as kinOf, makeSuitor } from './characters';
+import type { LifeEv, Opt, Eff, Check } from './life';
+import { adult, all, any, byPlace, demonL, dragonNear, elder, flag, heavenL, hi, job, kid, lo, married, noble, notDragon, notHeaven, orphan, outdoors, pjob, race, rich, single, stat, under, atWarC2 } from './life';
+import { ageOf } from './state';
+import { RACES } from '../data/races';
+
+const C0 = 0, AMB = 1, GRE = 2, COM = 3, LOY = 4, FAI = 5, CUR = 6, SOC = 7, PRU = 8, PRI = 9;
+export const o = (l: string, ok: Eff, d = '', s?: [Check, number], no?: Eff): Opt => ({ l, d, ok, s, no });
+
+export const CHILD: LifeEv[] = [
+  { id: 'c_firstword', t: '첫마디', once: true, c: all(kid(0.1, 0.3), notDragon), x: '아기 {n}이(가) 처음으로 말을 하려 한다. 무슨 말이었을까?',
+    o: [o('"엄마"', { r: '온 집안이 기뻐하였다.', ch: 2, mood: 5 }), o('"칼"', { r: '어른들이 놀라 웃었다.', mi: 2, tr: [[C0, 5]] }), o('"왜?"', { r: '그날부터 질문이 끊이지 않았다.', in: 2, tr: [[CUR, 6]] })] },
+  { id: 'c_lost', t: '길 잃은 아이', once: true, c: kid(0.25, 0.6), x: '{market}의 인파 속에서 길을 잃었다. 낯선 골목이 무섭다.',
+    o: [o('울면서 부모를 부른다', { r: '경비병이 집에 데려다주었다.', mood: -3 }), o('혼자 길을 찾아본다', { ach: 'lostkid', r: '스스로 집을 찾아냈다. 어른들이 혀를 내둘렀다.', tr: [[C0, 6]], in: 2 }, '', ['in', 0.5], { r: '하룻밤을 길에서 보냈다.', hp: -5, tr: [[C0, 3]] }), o('낯선 아이와 함께 찾는다', { r: '평생의 친구를 사귀었다.', ch: 3, tr: [[SOC, 6]] })] },
+  { id: 'c_bully', t: '골목대장', cd: 40, c: kid(0.3, 0.9), x: '덩치 큰 아이가 {n}의 간식을 빼앗으려 한다.',
+    o: [o('맞서 싸운다', { ach: 'bully', r: '코피가 났지만 이겼다.', mi: 3, tr: [[C0, 5]], fame: 1 }, '', ['mi', 0.45], { r: '흠씬 두들겨 맞았다.', hp: -8, tr: [[PRI, -3]] }), o('나눠 먹자고 한다', { r: '둘은 친구가 되었다.', ch: 2, tr: [[COM, 4]] }), o('어른에게 이른다', { r: '골목대장은 혼쭐이 났다.', tr: [[LOY, 3], [C0, -3]] })] },
+  { id: 'c_stray', t: '떠돌이 짐승', once: true, c: kid(0.2, 0.8), x: x => byPlace(x, { surface: '비에 젖은 떠돌이 강아지가 {n}을(를) 따라온다.', under: '날개를 다친 박쥐 새끼가 {n}의 발치에서 낑낑댄다.', demon: '꼬리에 불이 꺼져 가는 불도마뱀 새끼가 {n}을(를) 따라온다.', heaven: '길 잃은 구름 여우 새끼가 {n}의 날개 밑으로 파고든다.' }),
+    o: [o('몰래 키운다', { ach: 'stray', r: '그 녀석은 충실한 친구가 되었다.', mood: 10, tr: [[COM, 6]] }), o('먹을 것만 주고 보낸다', { r: '그 녀석은 고마운 듯 떠나갔다.', tr: [[COM, 3]] }), o('돌을 던져 쫓는다', { r: '그 녀석이 겁에 질려 달아났다.', tr: [[COM, -6]] })] },
+  { id: 'c_book', t: '낡은 책', once: true, c: kid(0.4, 1), x: '집 구석 먼지 속에서 오래된 책 한 권을 발견하였다. 알 수 없는 문자가 빼곡하다.',
+    o: [o('밤새 해독한다', { ach: 'linguist', r: '몇 개의 낱말을 알아냈다.', in: 4, ma: 2, tr: [[CUR, 5]] }, '', ['in', 0.5], { r: '머리만 아팠다.', in: 1 }), o('그림만 본다', { r: '용과 기사의 그림에 마음을 빼앗겼다.', tr: [[C0, 4]] }), o('팔아서 사탕을 산다', { r: '사탕은 달았다.', wealth: 3, tr: [[GRE, 4]] })] },
+  { id: 'c_fire', t: '불장난', once: true, c: all(kid(0.3, 0.8), notHeaven), x: x => byPlace(x, { surface: '헛간 뒤에서 몰래 불장난을 하다 불씨가 짚더미로 옮겨붙었다!', under: '버섯 창고 뒤에서 횃불 장난을 하다 마른 이끼에 불이 옮겨붙었다!', demon: '유황 웅덩이 옆에서 장난을 치다 불길이 창고로 번졌다!', sky: '바람 창고 뒤에서 부싯돌 장난을 하다 마른 깃털 더미에 불이 붙었다!' }),
+    o: [o('물을 길어 끈다', { r: '가까스로 불을 껐다.', tr: [[PRU, 5]] }, '', ['luck', 0.6], { ach: 'barnfire', r: '창고가 홀랑 타 버렸다.', wealth: -10, mood: -10 }), o('어른을 부른다', { r: '꾸중을 들었지만 큰불은 막았다.', tr: [[LOY, 3]] }), o('도망친다', { r: '아무도 범인을 몰랐다… 아직은.', tr: [[COM, -3], [PRU, -3]] })] },
+  { id: 'c_noble_lesson', t: '귀족 교육', once: true, c: all(kid(0.4, 1), noble), x: '가정교사가 {n}에게 무엇부터 가르칠지 묻는다.',
+    o: [o('검술', { r: '목검을 쥐는 법을 배웠다.', mi: 4, co: 2 }), o('예법과 화술', { r: '어른들 앞에서 의젓해졌다.', ch: 5 }), o('역사와 병법', { r: '선조들의 전쟁을 외웠다.', in: 3, co: 3 }), o('수업을 빼먹고 성 밖으로', { r: '평민 아이들과 뛰어놀았다.', tr: [[SOC, 6]], ch: 2 })] },
+  { id: 'c_orphan_steal', t: '배고픈 밤', cd: 30, c: all(kid(0.3, 1), orphan), x: x => byPlace(x, { surface: '이틀째 아무것도 먹지 못하였다. 빵집 창가에 갓 구운 빵이 놓여 있다.', under: '이틀째 아무것도 먹지 못하였다. 노점 화덕 위에서 버섯 꼬치가 익어 간다.', demon: '이틀째 아무것도 먹지 못하였다. 유황 화덕 위에서 고기가 지글거린다.', heaven: '이틀째 아무것도 먹지 못하였다. 성소의 제단에 꿀과자가 놓여 있다.' }),
+    o: [o('훔친다', { r: '따뜻한 한 끼였다.', hp: 5, tr: [[GRE, 4], [COM, -2]] }, '', ['luck', 0.6], { r: '붙잡혀 매를 맞았다.', hp: -10 }), o('일을 돕고 얻어먹는다', { r: '주인이 일을 시켜 주고 밥을 주었다.', tr: [[PRU, 4]], ch: 2 }), o('굶는다', { r: '긴 밤이었다.', hp: -5, tr: [[LOY, 2]] })] },
+  { id: 'c_orphan_mentor', t: '거리의 스승', once: true, c: all(kid(0.5, 1), orphan), x: '늙은 소매치기가 {n}에게 기술을 가르쳐 주겠다고 한다.',
+    o: [o('배운다', { r: '손놀림이 빨라졌다.', tr: [[GRE, 5], [COM, -3]], in: 2 }), o('거절하고 {temple}(으)로 간다', { r: '{temple}에서 잠자리를 얻었다.', tr: [[FAI, 8]] })] },
+  { id: 'c_pj_smith', t: '대장간의 아이', once: true, c: all(kid(0.4, 1), pjob('대장장이')), x: '부모가 쓰던 망치가 {n}의 손에 쥐어졌다.',
+    o: [o('쇠를 두드려 본다', { r: '불꽃이 튀었다. 팔에 힘이 붙었다.', mi: 4 }), o('망치로 장난감을 만든다', { r: '작은 쇠 인형을 만들었다.', in: 2, tr: [[CUR, 4]] })] },
+  { id: 'c_pj_farm', t: '수확의 계절', once: true, c: all(kid(0.4, 1), pjob('농부', '평민')), x: x => byPlace(x, { demon: '잿빛 들판의 가시열매가 익었다. 어린 {n}도 손을 데어 가며 거든다.', surface: '가을걷이로 온 마을이 바쁘다. 어린 {n}도 할 일을 찾는다.', under: '버섯 수확철이라 온 굴이 바쁘다. 어린 {n}도 할 일을 찾는다.', heaven: '빛의 정원에 열매가 익어 모두가 바쁘다. 어린 {n}도 할 일을 찾는다.' }),
+    o: [o('수확물을 나른다', { r: '허리가 휘었지만 뿌듯하였다.', mi: 3, tr: [[PRU, 2]] }), o('도둑 짐승을 쫓는다', { r: '허수아비보다 쓸모 있었다.', tr: [[SOC, 3]] }), o('몰래 낮잠을 잔다', { r: '들키지 않았다.', tr: [[AMB, -3]] })] },
+  { id: 'c_pj_priest', t: '신전의 아이', once: true, c: all(kid(0.4, 1), pjob('성직자', '치유사')), x: '부모를 따라 {temple}에서 아픈 이들을 돌보았다.',
+    o: [o('곁에서 기도한다', { r: '마음이 평온해졌다.', tr: [[FAI, 8], [COM, 4]] }), o('약초를 익힌다', { r: '약초 이름을 스무 가지나 외웠다.', in: 3 })] },
+  { id: 'c_pj_merchant', t: '셈을 배우다', once: true, c: all(kid(0.4, 1), pjob('상인')), x: '부모가 가게를 잠시 맡겼다. 손님이 값을 깎아 달라 한다.',
+    o: [o('절대 안 깎아준다', { r: '손님은 투덜대며 샀다.', wealth: 5, tr: [[GRE, 4]] }), o('덤을 얹어 준다', { r: '손님이 단골이 되었다.', ch: 3, tr: [[COM, 3]] }), o('셈을 틀린다', { r: '혼쭐이 났다.', in: 1 })] },
+  { id: 'c_pj_warrior', t: '무관의 아이', once: true, c: all(kid(0.4, 1), pjob('전사', '기사')), x: '부모의 낡은 방패 뒤에서 {n}은(는) 무엇을 꿈꾸었을까.',
+    o: [o('부모 같은 전사', { r: '매일 아침 나무를 베듯 목검을 휘둘렀다.', mi: 4, tr: [[C0, 4]] }), o('전쟁 없는 세상', { r: '부모는 말없이 머리를 쓰다듬었다.', tr: [[COM, 6]] })] },
+  { id: 'c_pj_mage', t: '부모의 주문서', once: true, c: all(kid(0.4, 1), pjob('마법사', '연금술사')), x: '부모의 서재에서 주문서를 몰래 펼쳤다. 손끝이 따끔거린다.',
+    o: [o('주문을 읊어 본다', { ach: 'firstspark', r: '작은 불꽃이 피어올랐다!', ma: 5 }, '', ['ma', 0.4], { r: '눈썹이 홀랑 탔다.', hp: -3, ma: 1 }), o('얌전히 덮는다', { r: '언젠가 제대로 배우리라 다짐하였다.', tr: [[PRU, 4]] })] },
+  { id: 'c_pj_hunter', t: '첫 사냥', once: true, c: all(kid(0.5, 1), pjob('사냥꾼')), x: '부모를 따라 처음으로 사냥에 나섰다. 수풀 너머에 사슴이 보인다.',
+    o: [o('활을 쏜다', { ach: 'firsthunt', r: '사슴이 쓰러졌다. 첫 사냥이었다.', mi: 3, fame: 1 }, '', ['mi', 0.4], { r: '화살은 빗나갔다.', tr: [[C0, 1]] }), o('사슴을 보내 준다', { r: '사슴의 눈이 오래 기억에 남았다.', tr: [[COM, 6]] })] },
+  { id: 'c_pj_miner', t: '갱도 놀이', once: true, c: all(kid(0.4, 1), any(pjob('광부'), race('dwarf', 'kobold'))), x: '버려진 갱도에서 친구들과 놀다가 반짝이는 돌을 찾았다.',
+    o: [o('몰래 간직한다', { r: '그것은 작은 보석이었다.', wealth: 10, tr: [[GRE, 3]] }), o('더 깊이 들어가 본다', { r: '어둠 속에서 무언가 숨 쉬는 소리를 들었다.', tr: [[C0, 5], [CUR, 5]] }, '', ['luck', 0.7], { r: '갱도가 무너져 다쳤다.', hp: -15 })] },
+  { id: 'c_storm', t: '폭풍우의 밤', once: true, c: all(kid(0.2, 0.7), outdoors), x: '천둥이 몰아치는 밤, 번개가 마을 큰 나무를 쪼갰다.',
+    o: [o('창밖을 구경한다', { r: '번개의 빛이 눈에 새겨졌다.', ma: 2, tr: [[C0, 3]] }), o('이불 속에 숨는다', { r: '긴 밤이었다.', tr: [[PRU, 3]] })] },
+  { id: 'c_festival', t: '축제의 밤', cd: 36, c: kid(0.3, 1), x: '마을 축제가 열렸다. 광장에서는 음악이 흐르고 노점이 즐비하다.',
+    o: [o('춤을 춘다', { r: '모두가 박수를 쳤다.', ch: 3, mood: 8 }), o('곡예사를 따라 한다', { r: '재주넘기를 배웠다.', mi: 2 }), o('점쟁이 천막에 들어간다', { ach: 'fortune', r: '"너는 언젠가 왕관을 보게 될 게다."', tr: [[AMB, 5]] })] },
+  { id: 'c_sick', t: '열병', once: true, c: kid(0.1, 0.8), x: '{n}이(가) 고열에 시달린다. 마을 의원은 고개를 젓는다.',
+    o: [o('약초를 쓴다', { r: '열이 내렸다.', hp: 5 }, '', ['luck', 0.75], { r: '오래 앓았지만 살아남았다. 몸이 약해졌다.', hp: -15 }), o('{temple}에 기도한다', { ach: 'miraclekid', r: '기적처럼 열이 내렸다.', tr: [[FAI, 8]] }, '', ['t5', 0.6], { r: '오래 앓았다.', hp: -10 })] },
+  { id: 'c_elder_story', t: '할머니의 옛이야기', once: true, c: kid(0.3, 0.9), x: '마을 할머니가 아이들을 모아 옛이야기를 들려준다. 어떤 이야기가 좋을까?',
+    o: [o('용과 용사의 이야기', { r: '용사가 되고 싶다고 생각하였다.', tr: [[C0, 5]] }), o('마왕의 이야기', { r: '무섭기보다 이상하게 끌렸다.', tr: [[AMB, 4]] }), o('세계수의 이야기', { r: '숲이 다르게 보이기 시작하였다.', tr: [[FAI, 4], [COM, 3]] }), o('도둑 왕의 이야기', { r: '꾀를 쓰는 법이 재미있었다.', tr: [[GRE, 3]], in: 1 })] },
+  { id: 'c_race_elf', t: '숲의 노래', once: true, c: all(kid(0.3, 1), race('elf')), x: '숲의 정령이 어린 {n}에게 노래를 가르쳐 주려 한다.',
+    o: [o('귀 기울인다', { r: '나뭇잎이 함께 노래하였다.', ma: 5, tr: [[FAI, 4]] }), o('도망친다', { r: '정령은 서운한 듯 사라졌다.', tr: [[C0, -2]] })] },
+  { id: 'c_race_dwarf', t: '첫 수염', once: true, c: all(kid(0.6, 1), race('dwarf')), x: '{n}의 턱에 첫 수염이 났다. 씨족 어른들이 땋는 법을 정해 주겠다고 한다.',
+    o: [o('전사의 매듭', { r: '어른들이 흡족해하였다.', mi: 3, tr: [[PRI, 4]] }), o('대장장이의 매듭', { r: '불과 쇠의 축복을 받았다.', in: 2, mi: 1 }), o('자기만의 매듭', { r: '어른들이 혀를 찼다.', tr: [[CUR, 5], [LOY, -3]] })] },
+  { id: 'c_race_orc', t: '힘겨루기', once: true, c: all(kid(0.5, 1), race('orc', 'goblin')), x: '부족의 아이들이 서열을 정하는 힘겨루기를 한다.',
+    o: [o('정면으로 붙는다', { ach: 'alpha', r: '서열 일등이 되었다!', mi: 5, fame: 3, tr: [[PRI, 5]] }, '', ['mi', 0.4], { r: '바닥을 굴렀다.', hp: -10 }), o('꾀를 쓴다', { r: '상대의 발을 걸어 이겼다.', in: 3, tr: [[GRE, 2]] })] },
+  { id: 'c_race_beast', t: '첫 변신', once: true, c: all(kid(0.5, 1), race('beast')), x: '보름달 아래서 {n}의 몸속 야수가 깨어나려 한다.',
+    o: [o('받아들인다', { r: '숲을 질주하였다. 자유로웠다.', mi: 4, tr: [[C0, 4]] }), o('억누른다', { r: '이를 악물고 버텼다.', tr: [[PRU, 6]], in: 2 })] },
+  { id: 'c_race_majin', t: '뿔이 돋다', once: true, c: all(kid(0.5, 1), race('majin', 'demon')), x: '{n}의 이마에 작은 뿔이 돋았다. 몸 안에서 마기가 들끓는다.',
+    o: [o('마기를 갈고닦는다', { r: '어둠의 힘이 손끝에 감겼다.', ma: 5, tr: [[AMB, 4]] }), o('마기를 다스린다', { r: '마음이 고요해졌다.', tr: [[PRU, 5], [COM, 3]] })] },
+  { id: 'c_race_angel', t: '날개를 펴다', once: true, c: all(kid(0.5, 1), race('angel')), x: '어린 {n}의 날개가 처음으로 하늘을 품었다.',
+    o: [o('구름 위로 날아오른다', { r: '세상이 한눈에 보였다.', tr: [[CUR, 6]], ma: 2 }), o('지상을 내려다본다', { r: '지상의 사람들이 보였다. 그들을 지키고 싶었다.', tr: [[COM, 6]] })] },
+  { id: 'c_race_kobold', t: '용의 꿈', once: true, c: all(kid(0.4, 1), race('kobold')), x: '꿈속에서 거대한 용이 {n}을(를) 내려다보았다.',
+    o: [o('엎드려 절한다', { r: '용을 섬기는 자의 운명을 느꼈다.', tr: [[FAI, 8], [LOY, 4]] }), o('눈을 마주친다', { r: '용이 웃은 것 같았다.', tr: [[C0, 6]], ma: 2 })] },
+  { id: 'c_race_darkelf', t: '거미의 시험', once: true, c: all(kid(0.5, 1), race('darkelf')), x: '사제가 {n}을(를) 거미 굴에 홀로 들여보냈다. 살아 나와야 한다.',
+    o: [o('거미를 다스린다', { r: '거미들이 길을 비켰다.', ma: 4, tr: [[PRI, 4]] }, '', ['ma', 0.45], { r: '독에 물려 앓았다.', hp: -15 }), o('몰래 빠져나간다', { r: '아무도 모르게 빠져나왔다.', in: 3, tr: [[PRU, 4]] })] },
+  { id: 'c_race_undead', t: '첫 각성', once: true, w: 50, c: race('undead'), x: '무덤 속에서 눈을 떴다. 기억나지 않는 생의 조각들이 맴돈다.',
+    o: [o('옛 기억을 좇는다', { r: '희미한 얼굴 하나가 떠올랐다.', tr: [[COM, 5]] }), o('지금의 몸을 받아들인다', { r: '차가운 힘이 뼈마디에 스며들었다.', ma: 4 })] },
+  { id: 'c_friend', t: '단짝', once: true, c: kid(0.4, 1), x: x => byPlace(x, { surface: '{n}에게 늘 붙어 다니는 단짝이 생겼다. 그 아이가 함께 몰래 성벽 밖으로 나가자고 한다.', under: '{n}에게 늘 붙어 다니는 단짝이 생겼다. 그 아이가 아무도 안 가 본 옆 갱도로 가 보자고 한다.', demon: '{n}에게 늘 붙어 다니는 단짝이 생겼다. 그 아이가 용암강 건너편을 구경하러 가자고 한다.', heaven: '{n}에게 늘 붙어 다니는 단짝이 생겼다. 그 아이가 성역 끝 구름 아래로 내려가 보자고 한다.' }),
+    o: [o('같이 나간다', { r: '처음 보는 풍경에 넋을 잃었다.', tr: [[CUR, 4], [SOC, 3]] }, '', ['luck', 0.7], { r: '사나운 짐승을 만나 혼비백산 도망쳤다.', hp: -5, tr: [[C0, 3]] }), o('말린다', { r: '단짝은 투덜댔지만 남았다.', tr: [[PRU, 4]] })] },
+  { id: 'c_teen_love', t: '첫사랑', once: true, c: all(kid(0.75, 1), notDragon), x: '가슴이 콩닥거리는 상대가 생겼다. 우물가에서 마주칠 때마다 얼굴이 붉어진다.',
+    o: [o('편지를 쓴다', { r: '답장이 왔다! 하지만 그것은 짧은 여름이었다.', ch: 3, mood: 10 }, '', ['ch', 0.5], { r: '편지가 온 마을에 돌았다.', mood: -10 }), o('멀리서 바라만 본다', { r: '그 마음은 오래도록 간직되었다.', tr: [[PRU, 3]] })] },
+  { id: 'c_teen_rebel', t: '반항', once: true, c: all(kid(0.8, 1), notDragon), x: '어른들의 잔소리가 지긋지긋하다. 집을 뛰쳐나가고 싶다.',
+    o: [o('가출한다', { ach: 'runaway', r: '사흘 만에 배고파 돌아왔다.', tr: [[C0, 4], [LOY, -4]] }), o('참는다', { r: '어른들이 조금 더 믿어 주었다.', tr: [[LOY, 5]] }), o('대화를 청한다', { r: '처음으로 부모와 마음을 터놓았다.', ch: 3, tr: [[SOC, 3]] })] },
+  { id: 'c_quake', t: '흔들리는 굴', once: true, c: all(kid(0.2, 0.8), under), x: '밤중에 굴이 흔들렸다. 천장에서 종유석이 우수수 떨어진다.',
+    o: [o('옆집 아이를 감싼다', { r: '등에 돌을 맞았지만 옆집 아이는 무사하였다.', hp: -5, tr: [[COM, 6], [C0, 4]] }), o('밖으로 뛰쳐나간다', { r: '재빨리 피하였다.', tr: [[PRU, 4]] }, '', ['mi', 0.5], { r: '넘어져 무릎이 깨졌다.', hp: -6 })] },
+  { id: 'c_glowworm', t: '빛벌레의 길', once: true, c: all(kid(0.3, 0.9), under), x: '갱도 깊은 곳으로 빛벌레 떼가 줄지어 날아간다. 어른들은 따라가지 말라 했다.',
+    o: [o('몰래 따라간다', { r: '빛벌레 끝에서 반짝이는 수정 동굴을 찾았다.', wealth: 8, tr: [[CUR, 6]] }, '', ['in', 0.5], { r: '길을 잃어 하루 만에 구조되었다.', hp: -5 }), o('어른 말을 듣는다', { r: '빛벌레가 사라질 때까지 지켜보았다.', tr: [[PRU, 4]] })] },
+  { id: 'c_ember', t: '잿빛 눈', once: true, c: all(kid(0.2, 0.9), demonL), x: '핏빛 하늘에서 잿빛 눈이 내린다. 어른들은 불길한 날이라며 문을 닫았다.',
+    o: [o('밖에 나가 재를 맞는다', { r: '재가 피부에 스며들며 따끔거렸다. 몸속 마기가 꿈틀거렸다.', ma: 3, hp: -3 }), o('어른들 곁에 웅크린다', { r: '할머니가 옛 마계의 노래를 불러 주었다.', tr: [[LOY, 4]] })] },
+  { id: 'c_cloudfall', t: '구름 아래', once: true, c: all(kid(0.2, 0.9), x => !!x.home && (x.home.l === 0 || x.home.l === 1)), x: '구름 가장자리에서 놀다 발을 헛디뎠다! 아래는 끝없는 하늘이다.',
+    o: [o('날개를 편다', { r: '처음으로 스스로 날아올랐다!', ma: 2, tr: [[C0, 6]] }, '', ['mi', 0.5], { r: '어른이 겨우 붙잡아 주었다. 크게 혼났다.', mood: -5 }), o('구름을 붙잡는다', { r: '구름 끝에 매달려 살아남았다.', tr: [[PRU, 5]] })] },
+];
+
+export const ROMANCE: LifeEv[] = [
+  { id: 'r_meet', t: '인연', cd: 24, w: 2, c: all(adult, single, notDragon),
+    data: x => {
+      const cands = x.w.chars.filter(o2 => o2.died < 0 && o2.id !== x.c.id && o2.spouse < 0 && o2.sex !== x.c.sex && o2.race === x.c.race
+        && (o2.home === x.c.home || (o2.l === x.c.l && Math.hypot(o2.x - x.c.x, o2.y - x.c.y) < 15)) && isAdult(x.w, o2) && !kinOf(x.c, o2) && o2.act.kind === 'idle' && o2.role !== '노예'
+        && Math.abs(ageOf(x.w, o2) - x.age) < Math.max(12, x.age * 0.3));
+      // 눈에 띄는 이가 없으면, 아직 이름 모를 이웃과 인연이 닿는다
+      if (!cands.length) { const k = makeSuitor(x.w, x.c); return k ? { oId: k.id } : null; }
+      const best = x.w.rngSim.weighted(cands, c2 => 5 + Math.max(0, (x.c.relations[c2.id] ?? 0) + 20) + c2.stats.charisma * 0.2)!;
+      return { oId: best.id };
+    },
+    x: '{o}와(과) 자꾸 눈이 마주친다. 상대도 싫지 않은 눈치다.',
+    o: [o('청혼한다', { ach: 'proposal', r: '{o}이(가) 손을 맞잡았다! 두 사람은 부부가 되었다.', fx: 'marry', mood: 20 }, '성공하면 혼인', ['ch', 0.45], { ach: 'rejected', r: '{o}은(는) 아직 마음의 준비가 안 되었다고 하였다.', mood: -8 }),
+      o('천천히 다가간다', { r: '{o}과(와) 가까워졌다.', fx: 'friend', mood: 5 }), o('마음을 접는다', { r: '마음을 접었다.' })] },
+  { id: 'r_widow', t: '홀로 남은 밤', once: true, c: all(adult, single, notDragon, x => x.c.children.some(id => { const k = x.w.chars[id]; const p = k && (k.father === x.c.id ? k.mother : k.father); return p !== undefined && p >= 0 && x.w.chars[p]?.died >= 0; })), x: '배우자를 잃은 뒤 집이 너무 넓게 느껴진다.',
+    o: [o('아이들에게 마음을 쏟는다', { r: '아이들의 웃음이 집을 채웠다.', mood: 10, tr: [[COM, 4]] }), o('다시 사랑을 찾아본다', { r: '마음의 문을 조금 열었다.', tr: [[SOC, 5]] })] },
+  { id: 'r_noble_match', t: '정략혼', once: true, c: all(adult, single, noble),
+    data: x => {
+      const k = x.w.chars.filter(o2 => o2.died < 0 && o2.spouse < 0 && o2.sex !== x.c.sex && o2.race === x.c.race && isAdult(x.w, o2) && !kinOf(x.c, o2) && !o2.isPlayer && o2.role !== '노예'
+        && o2.faction === x.c.faction && Math.abs(ageOf(x.w, o2) - x.age) < 15).sort((a, b) => b.fame + b.honor - a.fame - a.honor)[0];
+      return k ? { oId: k.id } : null;
+    },
+    x: '집안 어른들이 이웃 가문과의 혼담을 가져왔다. 상대는 {o}. 얼굴도 모르는 사람이다.',
+    o: [o('가문을 위해 받아들인다', { r: '{o}과(와)의 혼례는 성대하였다. 사랑은… 나중 일이었다.', fx: 'marry', honor: 15, wealth: 80, tr: [[LOY, 5]] }), o('거절하고 사랑을 찾겠다', { r: '집안이 발칵 뒤집혔다.', tr: [[C0, 5], [LOY, -6]], honor: -5 })] },
+  { id: 'r_crossrace', t: '금지된 마음', once: true, w: 0.5, c: all(adult, single, notDragon), x: '다른 종족의 나그네에게 마음을 빼앗겼다. 사람들은 손가락질할 것이다.',
+    o: [o('함께 떠난다', { r: '두 사람은 소문 속으로 사라졌다. 몇 해 뒤 돌아왔을 때 사람들은 이미 잊고 있었다.', mood: 15, honor: -10, tr: [[C0, 5]] }), o('마음을 묻는다', { r: '그 사람의 노래가 오래 귓가에 남았다.', mood: -10 })] },
+  { id: 'r_quarrel', t: '부부싸움', cd: 48, c: all(adult, married, notDragon), x: '{sp}와(과) 사소한 일로 크게 다투었다. 집 안 공기가 차갑다.',
+    o: [o('먼저 사과한다', { r: '{sp}이(가) 웃으며 안아 주었다.', mood: 8, tr: [[PRI, -4]] }), o('선물을 사 온다', { ach: 'flowers', r: '작은 선물 하나에 화가 풀렸다.', wealth: -5, mood: 5 }), o('고집을 부린다', { r: '며칠 동안 말을 섞지 않았다.', mood: -10, tr: [[PRI, 4]] })] },
+  { id: 'r_anniv', t: '혼인 기념일', cd: 120, c: all(adult, married, notDragon), x: '{sp}와(과) 혼인한 지 어느덧 여러 해가 흘렀다.',
+    o: [o('둘만의 여행을 떠난다', { r: '젊은 날처럼 웃었다.', wealth: -20, mood: 15 }), o('소박한 저녁을 함께한다', { r: '그것으로 충분하였다.', mood: 8 })] },
+  { id: 'r_child_wish', t: '아이를 바라다', cd: 60, c: all(adult, married, notDragon, x => x.c.children.length < 4 && x.age < x.c.lifespan * 0.5), x: '{sp}이(가) 아이를 갖고 싶다고 한다.',
+    o: [o('좋다고 한다', { r: '이듬해 봄, 아기 울음소리가 들렸다.', fx: 'child', mood: 15 }, '', ['luck', 0.6], { r: '아직은 소식이 없다.' }), o('아직은 이르다', { r: '조금 더 기다리기로 하였다.' })] },
+  { id: 'r_kid_grown', t: '자식의 진로', cd: 120, c: all(adult, x => x.c.children.some(id => { const k = x.w.chars[id]; if (!k || k.died >= 0) return false; const st = ageOf(x.w, k) / Math.max(1, RACES[k.race].adult); return st >= 0.75 && st < 1.2; })), x: '다 큰 자식이 앞날을 상의하러 왔다.',
+    o: [o('네 꿈을 따라라', { r: '자식의 눈이 반짝였다.', ch: 2, mood: 5 }), o('가업을 이어라', { r: '자식은 고개를 끄덕였다.', tr: [[LOY, 3]] }), o('세상을 보고 오너라', { r: '자식은 여행을 떠났다.', wealth: -15 })] },
+  { id: 'r_old_flame', t: '옛 연인', once: true, c: all(adult, notDragon, x => x.stage >= 1.8), x: '{market}에서 젊은 날의 연인과 마주쳤다. 세월이 얼굴에 내려앉아 있다.',
+    o: [o('반갑게 인사한다', { r: '지난 일은 웃음이 되었다.', mood: 8 }), o('못 본 척한다', { r: '가슴 한쪽이 시큰하였다.', mood: -5 })] },
+];
+
+export const TRAIT: LifeEv[] = [
+  { id: 't_brave_monster', t: '괴물 출몰', cd: 60, c: all(adult, hi(C0, 70), notDragon, notHeaven), x: '마을 근처에 괴물이 나타나 가축을 물어 간다. 모두 두려워 문을 걸어 잠갔다.',
+    o: [o('홀로 사냥에 나선다', { ach: 'monster', r: '괴물의 머리를 들고 돌아왔다!', fame: 20, honor: 10, mi: 3 }, '', ['mi', 0.4], { r: '크게 다쳐 돌아왔다.', hp: -35 }), o('사람들을 모아 함께 간다', { r: '모두 함께 괴물을 몰아냈다.', fame: 10, co: 3 }, '', ['co', 0.55], { r: '괴물은 달아났다.', fame: 2 })] },
+  { id: 't_coward_flee', t: '두려움', cd: 60, c: all(adult, lo(C0, 30), notHeaven), x: '밤길에 수상한 그림자가 뒤를 밟는다.',
+    o: [o('죽어라 달린다', { r: '숨이 턱에 닿도록 달려 집에 닿았다.', hp: -3 }), o('용기를 내 돌아본다', { ach: 'cat', r: '그것은 길 잃은 고양이였다.', tr: [[C0, 6]] })] },
+  { id: 't_greedy_purse', t: '떨어진 지갑', cd: 72, c: all(adult, hi(GRE, 60)), x: '길에서 두툼한 지갑을 주웠다. 귀족 가문의 문장이 새겨져 있다.',
+    o: [o('슬쩍 챙긴다', { r: '금화가 가득하였다.', wealth: 60, tr: [[GRE, 3]] }, '', ['luck', 0.7], { ach: 'caught', r: '경비병에게 들켰다!', wealth: -30, honor: -15 }), o('주인을 찾아준다', { r: '귀족이 사례금을 주었다.', wealth: 25, honor: 10, tr: [[GRE, -5]] })] },
+  { id: 't_kind_beggar', t: '헐벗은 노인', cd: 60, c: all(adult, hi(COM, 65), notHeaven), x: x => byPlace(x, { surface: '추운 겨울, 다리 밑에서 떨고 있는 노인을 보았다.', under: '차가운 갱도 구석에서 떨고 있는 노인을 보았다.', demon: '잿빛 폭풍 속에 웅크린 노인을 보았다.', sky: '바람 부는 섬 끝에서 떨고 있는 노인을 보았다.' }),
+    o: [o('집으로 데려온다', { r: '노인은 떠나며 말하였다. "너에게 축복이 있기를." 그 뒤로 이상하게 운이 좋았다.', wealth: -10, honor: 10, mood: 10, hp: 5 }), o('외투를 벗어 준다', { r: '몸은 추웠지만 마음은 따뜻하였다.', honor: 5, hp: -3 })] },
+  { id: 't_cruel_chance', t: '약자의 약점', cd: 72, c: all(adult, lo(COM, 30)), x: '빚진 이웃의 약점을 쥐게 되었다.',
+    o: [o('협박해 재산을 뺏는다', { r: '이웃의 집이 당신 것이 되었다.', wealth: 80, honor: -25, tr: [[COM, -3]] }), o('모른 척 넘어간다', { r: '이웃은 끝내 그 사실을 몰랐다.', tr: [[COM, 4]] })] },
+  { id: 't_loyal_test', t: '충성의 시험', cd: 96, c: all(adult, hi(LOY, 70), x => !!x.ld && x.ld.id !== x.c.id), x: '{ld}의 정적이 거액을 내밀며 {ld}의 일정을 알려 달라고 한다.',
+    o: [o('단호히 거절하고 보고한다', { r: '{ld}이(가) 당신을 칭찬하였다.', honor: 20, fame: 5 }), o('돈을 받는다', { r: '주머니가 두둑해졌다. 그날 밤 잠이 오지 않았다.', wealth: 120, tr: [[LOY, -15]], honor: -10 })] },
+  { id: 't_faith_vision', t: '환시', once: true, c: all(adult, hi(FAI, 75)), x: '기도 중에 눈부신 빛이 보였다. 빛이 무언가를 말하려 한다.',
+    o: [o('계시를 따른다', { r: '빛이 가리키는 성지로 순례를 떠났다.', honor: 15, ma: 5, tr: [[FAI, 5]] }), o('헛것이라 여긴다', { r: '빛은 사라졌다.', tr: [[FAI, -5]] })] },
+  { id: 't_curious_ruin', t: '이상한 문', cd: 72, c: all(adult, hi(CUR, 70)), x: x => byPlace(x, { surface: '숲속 바위에 문 모양의 무늬가 새겨져 있다. 손을 대니 따뜻하다.', under: '동굴 벽에 문 모양의 무늬가 새겨져 있다. 손을 대니 따뜻하다.', demon: '흑요석 절벽에 문 모양의 무늬가 새겨져 있다. 손을 대니 차갑다.', heaven: '구름 대지 아래 빛의 문양이 떠올랐다. 손을 대니 따뜻하다.' }),
+    o: [o('주문을 외워 연다', { ach: 'ancientvault', r: '고대인의 비밀 창고였다!', wealth: 70, in: 4, ma: 3 }, '', ['ma', 0.35], { r: '덫이 작동하였다.', hp: -25 }), o('지도에 표시만 한다', { r: '언젠가 다시 오리라.', in: 2 })] },
+  { id: 't_social_party', t: '연회 초대', cd: 48, c: all(adult, hi(SOC, 65)), x: '유력자의 연회에 초대받았다. 내로라하는 이들이 모인다.',
+    o: [o('좌중을 휘어잡는다', { r: '모두가 당신 이름을 기억하게 되었다.', fame: 12, ch: 3 }, '', ['ch', 0.45], { r: '실언을 하여 웃음거리가 되었다.', honor: -5 }), o('조용히 인맥을 쌓는다', { r: '쓸 만한 사람들을 알게 되었다.', fame: 4, wealth: 15 })] },
+  { id: 't_lonely_hermit', t: '은둔의 유혹', once: true, c: all(adult, lo(SOC, 25)), x: x => byPlace(x, { surface: '사람들 틈에 있는 것이 견디기 힘들다. 산속 오두막이 눈에 아른거린다.', under: '사람들 틈에 있는 것이 견디기 힘들다. 아무도 오지 않는 외딴 굴이 눈에 아른거린다.', demon: '사람들 틈에 있는 것이 견디기 힘들다. 황야 끝 버려진 탑이 눈에 아른거린다.', heaven: '무리 속에 있는 것이 견디기 힘들다. 성역 끝 외딴 구름섬이 눈에 아른거린다.' }),
+    o: [o('홀로 떠난다', { r: '몇 해를 홀로 지내며 많은 것을 깨달았다.', in: 6, ma: 4, mood: 10, fame: -5 }), o('조금만 더 버텨 본다', { r: '오래된 친구 하나가 손을 내밀었다.', tr: [[SOC, 6]] })] },
+  { id: 't_prudent_invest', t: '신중한 저축', cd: 96, c: all(adult, hi(PRU, 70), rich(30)), x: '모아 둔 돈을 어떻게 굴릴까.',
+    o: [o('땅을 산다', { r: '땅값이 꾸준히 올랐다.', wealth: 40 }, '', ['luck', 0.75], { r: '재해로 땅이 쓸모없어졌다.', wealth: -20 }), o('금을 묻어 둔다', { r: '안전하게 묻었다.', wealth: 5 })] },
+  { id: 't_reckless_bet', t: '도박판', cd: 48, c: all(adult, lo(PRU, 30)), x: '주점 뒷방에서 큰 판이 벌어졌다. 손이 근질거린다.',
+    o: [o('전 재산을 건다', { ach: 'bigwin', r: '판을 쓸었다!', wealth: 150, fame: 5 }, '', ['luck', 0.35], { ach: 'broke', r: '빈털터리가 되었다.', wealth: -999, mood: -20 }), o('조금만 건다', { r: '본전치기였다.' }), o('나온다', { r: '현명한 선택이었다.', tr: [[PRU, 4]] })] },
+  { id: 't_proud_insult', t: '모욕', cd: 60, c: all(adult, hi(PRI, 70)), x: '거만한 이가 공개적으로 {n}을(를) 조롱하였다.',
+    data: x => {
+      const os = x.w.chars.filter(c2 => c2.died < 0 && c2.home === x.c.home && c2.id !== x.c.id && isAdult(x.w, c2) && !kinOf(x.c, c2) && c2.id !== x.c.spouse && c2.id !== x.ld?.id && c2.act.kind === 'idle');
+      return os.length ? { oId: x.w.rngSim.pick(os).id } : null;
+    },
+    o: [o('결투를 신청한다', { r: '명예를 건 결투가 벌어졌다.', fx: 'duel' }), o('평생 원수로 삼는다', { r: '{o}의 이름을 가슴에 새겼다.', fx: 'rival' }), o('웃어넘긴다', { r: '사람들은 당신의 그릇을 칭찬하였다.', honor: 8, tr: [[PRI, -6]] })] },
+  { id: 't_ambition_dream', t: '야망', once: true, c: all(adult, hi(AMB, 75), x => !x.isLeader), x: '밤마다 같은 꿈을 꾼다. 왕좌에 앉아 있는 자신의 모습이다.',
+    o: [o('꿈을 이루겠다고 다짐한다', { r: '그날부터 모든 것이 달라 보였다.', co: 4, ch: 3, tr: [[AMB, 5]] }), o('헛된 꿈이라 여긴다', { r: '꿈은 서서히 희미해졌다.', tr: [[AMB, -8]] })] },
+  { id: 't_traitor_whisper', t: '은밀한 제안', once: true, c: all(adult, x => x.c.apt[5] >= 60, x => !!x.f && Object.values(x.f.relations).some(v => v < -20)), x: '적국의 밀사가 찾아와 {f}의 비밀을 넘기면 귀족 작위를 주겠다고 한다.',
+    o: [o('제안을 받아들인다', { r: '이중첩자가 되었다. 금화가 쌓인다.', wealth: 200, tr: [[LOY, -20]], honor: -20 }), o('밀사를 붙잡는다', { r: '나라를 구한 영웅이 되었다.', fame: 25, honor: 20 }, '', ['mi', 0.5], { r: '밀사는 달아났다.', honor: 5 })] },
+  { id: 't_compassion_war', t: '적병', once: true, c: all(adult, hi(COM, 70), x => !!x.f && Object.keys(x.f.wars).length > 0), x: '부상당한 적국 병사가 창고에 숨어 있다. 신고하면 처형될 것이다.',
+    o: [o('몰래 치료해 돌려보낸다', { r: '그는 울며 감사하였다.', honor: 10, tr: [[COM, 4]] }, '', ['luck', 0.75], { r: '들켜서 반역자로 몰렸다.', honor: -30, hp: -15 }), o('신고한다', { r: '포상금을 받았다.', wealth: 30, tr: [[COM, -6]] })] },
+];
+
+export const RACIAL: LifeEv[] = [
+  { id: 'rc_elf_century', t: '백 년의 숙고', once: true, c: all(adult, race('elf')), x: '엘프에게 백 년은 짧다. 무엇에 백 년을 바칠까?',
+    o: [o('잊힌 노래를 복원한다', { r: '숲이 다시 노래하였다.', ma: 8, fame: 10 }), o('활 솜씨를 완성한다', { r: '바람마저 읽을 수 있게 되었다.', mi: 8 }), o('인간의 도시를 여행한다', { r: '짧게 사는 이들의 뜨거움을 배웠다.', ch: 6, tr: [[SOC, 6]] })] },
+  { id: 'rc_dwarf_grudge', t: '원한의 책', once: true, c: all(adult, race('dwarf')), x: '씨족의 원한의 책에 새로운 이름을 적을 차례다. 누구의 이름을 적을까?',
+    o: [o('고블린 족장', { r: '언젠가 반드시 갚으리라.', tr: [[PRI, 5]], mi: 2 }), o('빚을 떼먹은 상인', { r: '이름 옆에 이자까지 적었다.', tr: [[GRE, 4]] }), o('아무도 적지 않는다', { r: '어른들이 기이하게 여겼다.', tr: [[COM, 6]] })] },
+  { id: 'rc_dwarf_forge', t: '룬 단조', cd: 96, c: all(adult, race('dwarf'), stat('might', 50)), x: '대장간 불꽃 속에서 룬 문자가 떠오른다. 지금이라면 걸작을 만들 수 있을 것 같다.',
+    o: [o('전설의 도끼를 벼린다', { ach: 'runeaxe', r: '모두가 그 도끼를 보러 왔다.', item: '룬 도끼', fame: 25 }, '', ['mi', 0.35], { r: '쇠가 갈라졌다.', mood: -10 }), o('평범한 연장을 만든다', { r: '튼튼한 연장이었다.', wealth: 20 })] },
+  { id: 'rc_orc_waaagh', t: '와아아!', cd: 120, c: all(adult, race('orc', 'goblin'), atWarC2), x: '부족에 전쟁의 북소리가 울린다. 피가 끓는다!',
+    o: [o('선봉에 선다', { r: '적진을 휩쓸었다! 와아아!', fame: 20, mi: 4 }, '', ['mi', 0.5], { r: '머리가 깨졌다.', hp: -30 }), o('약탈품을 노린다', { r: '수레 가득 전리품을 챙겼다.', wealth: 60 })] },
+  { id: 'rc_goblin_scheme', t: '고블린의 꾀', cd: 72, c: all(adult, race('goblin', 'kobold')), x: '덩치 큰 놈들을 골탕 먹일 기막힌 꾀가 떠올랐다.',
+    o: [o('함정을 판다', { r: '덩치들이 줄줄이 빠졌다. 킬킬킬.', in: 4, fame: 5 }), o('보물을 훔친다', { r: '반짝이는 걸 잔뜩 챙겼다.', wealth: 40 }, '', ['luck', 0.55], { r: '붙잡혀 거꾸로 매달렸다.', hp: -15 })] },
+  { id: 'rc_kobold_dragon', t: '용을 섬기다', once: true, c: all(adult, race('kobold'), dragonNear(60)), x: '근처 산에 용이 산다는 소문이다. 코볼트의 피가 용을 섬기라 속삭인다.',
+    o: [o('공물을 들고 찾아간다', { r: '용은 공물을 받아 주었다. 용의 비늘 한 조각을 얻었다.', item: '용의 비늘', fame: 15, tr: [[FAI, 5]] }, '', ['luck', 0.5], { r: '용이 하품을 하였다. 당신은 날아갔다.', hp: -30 }), o('소문일 뿐이다', { r: '그날 밤 용의 꿈을 꾸었다.' })] },
+  { id: 'rc_beast_moon', t: '대수렵제', cd: 120, c: all(adult, race('beast')), x: '보름달이 뜨는 밤, 부족의 대수렵제가 열린다.',
+    o: [o('가장 큰 사냥감을 노린다', { r: '거대한 곰을 쓰러뜨려 영웅이 되었다.', fame: 20, mi: 3 }, '', ['mi', 0.45], { r: '곰에게 할퀴었다.', hp: -25 }), o('정령에게 춤을 바친다', { r: '정령이 미소 지었다.', ma: 4, tr: [[FAI, 4]] })] },
+  { id: 'rc_darkelf_intrigue', t: '가문의 암투', cd: 96, c: all(adult, race('darkelf')), x: '대모의 총애를 두고 다른 가문이 당신을 모함하고 있다.',
+    o: [o('독을 준비한다', { r: '정적은 다음 날 아침 일어나지 못하였다.', fame: 10, tr: [[COM, -8]] }, '', ['in', 0.45], { r: '독살 계획이 들통났다.', honor: -25, hp: -10 }), o('대모에게 충성을 맹세한다', { r: '대모가 당신을 감싸 주었다.', tr: [[LOY, 5]] })] },
+  { id: 'rc_majin_contract', t: '계약의 피', cd: 120, c: all(adult, race('majin', 'demon')), x: '하급 마족이 영혼의 일부를 바치면 힘을 주겠다고 한다.',
+    o: [o('계약한다', { r: '힘이 넘쳐흐른다. 대가는… 나중 일이다.', mi: 8, ma: 8, hp: -10 }), o('짓밟는다', { r: '하급 마족은 비명을 지르며 사라졌다.', fame: 5, tr: [[PRI, 4]] })] },
+  { id: 'rc_angel_descent', t: '지상의 부름', cd: 120, c: all(adult, race('angel')), x: '지상에서 간절한 기도가 들려온다. 작은 마을이 굶주리고 있다.',
+    o: [o('지상에 내려가 돕는다', { r: '마을 사람들은 당신을 성자라 불렀다.', honor: 20, fame: 15 }), o('천상의 법을 따른다', { r: '천사는 지상에 간섭하지 않는다.', tr: [[LOY, 4]] })] },
+  { id: 'rc_undead_memory', t: '살아 있던 날', cd: 120, c: all(adult, race('undead')), x: '살아 있을 때의 기억이 불쑥 떠올랐다. 따뜻한 손, 누군가의 웃음.',
+    o: [o('그 기억을 좇는다', { r: '오래된 무덤에서 자신의 이름을 찾았다.', tr: [[COM, 8]], mood: 10 }), o('지워 버린다', { r: '죽은 자에게 과거는 필요 없다.', ma: 5, tr: [[COM, -5]] })] },
+  { id: 'rc_human_ambition', t: '짧은 생', once: true, c: all(adult, race('human'), x => x.age > 30), x: '인간의 생은 짧다. 엘프는 수백 년을 산다는데. 남은 생을 무엇으로 채울까?',
+    o: [o('이름을 남긴다', { r: '역사에 이름을 남기리라 다짐하였다.', tr: [[AMB, 8]], fame: 5 }), o('사랑하는 이들과 산다', { r: '하루하루가 소중해졌다.', mood: 15 }), o('불로장생을 찾는다', { r: '연금술사들을 찾아다니기 시작하였다.', wealth: -40, tr: [[CUR, 6]] })] },
+  { id: 'rc_elder_legacy', t: '노년의 지혜', once: true, c: all(elder, notDragon), x: '젊은 날의 무용담을 들으러 찾아오는 이들이 늘었다. 어느새 {h}의 어른이 되어 있었다.',
+    o: [o('아낌없이 가르친다', { r: '많은 제자가 생겼다.', fame: 15, honor: 10 }), o('회고록을 쓴다', { r: '한 권의 책이 남았다.', fame: 20, in: 3 }), o('조용히 여생을 보낸다', { r: '평온한 나날이었다.', mood: 15, hp: 5 })] },
+];

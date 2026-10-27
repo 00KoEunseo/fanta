@@ -1,0 +1,11 @@
+import { createWorld } from '../src/sim/world';
+import { tick } from '../src/sim/tick';
+import { RACES } from '../src/data/races';
+const w = createWorld('TERR-1');
+for (let i = 0; i < 12 * 80; i++) tick(w);
+const rows = w.settlements.filter(s => s.alive && !RACES[s.race].noPop).map(s => ({ n: s.name, pop: Math.round(s.pop), tiles: s.tiles.length, tier: s.tier, per: +(s.pop / Math.max(1, s.tiles.length)).toFixed(1) }));
+rows.sort((a, b) => a.per - b.per);
+for (const r of rows.slice(0, 8)) console.log('적은', r);
+for (const r of rows.slice(-4)) console.log('많은', r);
+const per = rows.map(r => r.per).sort((a, b) => a - b);
+console.log('칸당 인구 중앙값', per[per.length >> 1]);

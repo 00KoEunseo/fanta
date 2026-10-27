@@ -1,0 +1,13 @@
+import { createWorld } from '../src/sim/world';
+import { tick } from '../src/sim/tick';
+const w = createWorld('REP-1');
+for (let i = 0; i < 12 * 150; i++) tick(w);
+const names = new Set<string>([...w.chars.map(c => c.name), ...w.settlements.map(s => s.name), ...w.factions.map(f => f.name), ...w.factions.map(f => f.baseName)]);
+const norm = (t: string) => { let s = t; for (const n of names) if (n.length >= 2 && s.includes(n)) s = s.split(n).join('○'); return s.replace(/\d+/g, '#').replace(/'[^']*'/g, "'…'").replace(/「[^」]*」/g, '「…」'); };
+const count = (texts: string[]) => { const m = new Map<string, number>(); for (const t of texts) { const k = norm(t); m.set(k, (m.get(k) ?? 0) + 1); } return [...m].sort((a, b) => b[1] - a[1]); };
+const news = w.news.map(n => n.text);
+console.log('소식', news.length, '종류', count(news).length);
+for (const [k, n] of count(news).slice(0, 18)) console.log(String(n).padStart(5), k.slice(0, 90));
+const logs = w.chars.flatMap(c => c.log.map(l => l.text));
+console.log('인물 기록', logs.length, '종류', count(logs).length);
+for (const [k, n] of count(logs).slice(0, 18)) console.log(String(n).padStart(5), k.slice(0, 90));

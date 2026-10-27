@@ -1,0 +1,11 @@
+import { createWorld } from '../src/sim/world';
+import { tick } from '../src/sim/tick';
+const w = createWorld('ROLE-1');
+for (let i = 0; i < 12 * 80; i++) tick(w);
+const alive = w.chars.filter(c => c.died < 0 && !c.isPlayer);
+const idle = alive.filter(c => c.role === '백수');
+console.log('NPC', alive.length, '백수', idle.length);
+const leaders = new Set(w.factions.filter(f => f.alive).map(f => f.leader));
+const govs = new Set(w.settlements.filter(s => s.alive).map(s => s.governor));
+for (const c of idle.slice(0, 15)) console.log(' ', c.name, c.race, leaders.has(c.id) ? '군주' : govs.has(c.id) ? '영주' : '', c.title, (c.log.find(l => /노예|해방|자유/.test(l.text))?.text ?? '').slice(0, 40));
+console.log('군주 직업', [...leaders].map(id => w.chars[id]?.role).join(','));

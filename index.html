@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>판타지 세계 연대기</title>
+  <link rel="stylesheet" href="/src/ui/style.css" />
+</head>
+<body>
+  <div id="app">
+    <header id="top">
+      <div class="brand">⚜ 세계 연대기</div>
+      <div class="seed" title="같은 시드를 입력하면 같은 지형·같은 시작 위치로 세계가 만들어집니다">
+        시드 <b id="seed-text">-</b>
+        <button id="btn-copy-seed" class="mini" title="시드 복사">⧉</button>
+      </div>
+      <div class="date"><span id="date-text">-</span> <span id="season-text" class="season"></span></div>
+      <div class="speed">
+        <button data-speed="-1" title="일시정지 (Space)">⏸</button>
+        <button data-speed="0" title="느림: 20초/월">느림</button>
+        <button data-speed="1" title="중간: 10초/월">중간</button>
+        <button data-speed="2" title="빠름: 5초/월">빠름</button>
+        <button data-speed="3" title="매우빠름: 2초/월">매우빠름</button>
+        <button id="btn-step" title="1개월 진행 (.)">+1월</button>
+        <button id="btn-year" title="1년 건너뛰기">+1년</button>
+        <button id="btn-10y" title="10년을 흘려보내고 요약을 본다">+10년</button>
+        <button id="btn-100y" title="100년을 흘려보내고 요약을 본다">+100년</button>
+      </div>
+      <div class="progress"><div id="progress-bar"></div></div>
+      <div class="actions">
+        <button id="btn-born" class="accent" title="이 세계에 한 생명으로 태어나 직접 인생을 살아갑니다">✦ 탄생</button>
+        <button id="btn-new">새 세계</button>
+        <button id="btn-save">저장</button>
+        <button id="btn-load">불러오기</button>
+        <button id="btn-export" title="JSON 파일로 내보내기">내보내기</button>
+        <button id="btn-help">?</button>
+      </div>
+    </header>
+
+    <aside id="left">
+      <div class="panel-title">세계의 층</div>
+      <div id="layer-tabs"></div>
+      <div class="panel-title">지도 보기</div>
+      <div id="mode-tabs">
+        <button data-mode="political">정치</button>
+        <button data-mode="terrain">지형</button>
+        <button data-mode="resource">자원</button>
+        <button data-mode="development">발전도</button>
+      </div>
+      <div class="panel-title">표시</div>
+      <label class="chk"><input type="checkbox" id="chk-chars" checked /> 인물</label>
+      <label class="chk"><input type="checkbox" id="chk-armies" checked /> 군대</label>
+      <label class="chk"><input type="checkbox" id="chk-names" checked /> 지명</label>
+      <label class="chk"><input type="checkbox" id="chk-secret" /> 숨은 자질 엿보기</label>
+      <div class="panel-title">범례</div>
+      <div id="legend"></div>
+    </aside>
+
+    <main id="mapwrap">
+      <canvas id="map"></canvas>
+      <div id="tooltip" hidden></div>
+      <div id="map-layer-name"></div>
+    </main>
+
+    <aside id="right">
+      <section id="player-hud" hidden></section>
+      <section class="box" id="box-news">
+        <div class="box-head">
+          <span>📜 주요 소식</span>
+          <span class="tabs" id="news-range">
+            <button data-range="3">이번 계절</button><button data-range="12">올해</button><button data-range="120">10년</button><button data-range="99999">전체</button>
+          </span>
+        </div>
+        <div id="news-list" class="scroll"></div>
+      </section>
+      <section class="box" id="box-ins">
+        <div class="box-head"><span id="inspect-title">🔍 살펴보기</span><span id="inspect-actions"></span></div>
+        <div id="inspect" class="scroll"><p class="dim">지도에서 정착지·인물·땅을 클릭하세요.</p></div>
+      </section>
+    </aside>
+
+    <footer id="bottom">
+      <div class="tabs" id="bottom-tabs">
+        <button data-tab="log">이달의 기록</button>
+        <button data-tab="chronicle">연대기</button>
+        <button data-tab="factions">세력</button>
+        <button data-tab="people">인물</button>
+        <button data-tab="seals">일곱 봉인</button>
+        <button data-tab="stats">세계 통계</button>
+        <button data-tab="mylife" id="tab-mylife" hidden>나의 일대기</button>
+        <button data-tab="arts">명품</button>
+        <button data-tab="achv">🏆 업적</button>
+      </div>
+      <div id="bottom-body" class="scroll"></div>
+    </footer>
+  </div>
+  <div id="ff-bar" hidden><div class="ff-text"></div><div class="ff-track"><i></i></div><button id="ff-stop" class="mini">취소</button></div>
+  <div id="cinema" hidden></div>
+  <div id="modal-root"></div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
