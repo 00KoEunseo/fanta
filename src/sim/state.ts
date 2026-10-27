@@ -132,7 +132,7 @@ export interface Faction {
 
 export interface LogEntry { t: number; text: string; imp?: number }
 
-export type ActivityKind = 'idle' | 'travel' | 'army' | 'colonize' | 'party' | 'voyage' | 'fleet' | 'clear' | 'caravan';
+export type ActivityKind = 'idle' | 'travel' | 'army' | 'colonize' | 'party' | 'voyage' | 'fleet' | 'clear' | 'caravan' | 'camp';
 export interface Activity {
   kind: ActivityKind;
   purpose?: 'adventure' | 'trade' | 'visit' | 'hunt' | 'return' | 'pilgrim' | 'duel' | 'flee' | 'clear' | 'muster';
@@ -230,6 +230,10 @@ export interface Army extends Pos {
   /** 정착 예정지 (이주민) */
   dest?: Pos;
   age: number;
+  /** 소속 주둔지 */
+  camp?: number;
+  /** 주둔지로 가는 중 (닿으면 합류한다) */
+  toCamp?: boolean;
 }
 
 export type NewsCat = 'war' | 'politics' | 'hero' | 'dark' | 'nature' | 'growth' | 'life' | 'trade' | 'doom' | 'player';
@@ -382,6 +386,8 @@ export interface World {
   towers: import('./towers').Tower[];
   /** 이름 있는 병들 */
   diseases: import('./disease').Disease[];
+  /** 전선의 주둔지들 */
+  camps?: import('./camps').Camp[];
   /** 세상의 신앙들 */
   religions?: import('./religion').Religion[];
   /** 길 위의 상단 */

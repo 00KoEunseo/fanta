@@ -1,4 +1,5 @@
 import { caravanMaster, sendCaravan } from './caravan';
+import { CAMP_MAX, ensureCamp, sendToCamp } from './camps';
 import { faithWarFactor, faithWarReasons } from './religion';
 import { inheritKnown, knownYears, knows } from './contact';
 import { RACES, raceAffinity, type RaceKey } from '../data/races';
@@ -710,6 +711,18 @@ export function launchAttack(w: World, f: Faction, e: Faction, goal: 'conquer' |
   }
   if (!best || !src || src.pop < 60) return false;
   const size = Math.max(25, src.pop * 0.2 + (src.id !== f.capital ? (w.settlements[f.capital]?.pop ?? 0) * 0.05 : 0));
+  // 먼 적국은 곧장 들이치지 않는다: 길목에 주둔지를 세우고 병력을 모은 뒤 거기서 출격한다
+  if (src.l === best.l && approxDist(w, src, best) > 14) {
+    const camp = ensureCamp(w, f, e, src, best);
+    if (camp) {
+      // 주둔지가 이미 넉넉하면 더 보내지 않는다 (병력은 주둔지에서 출격한다)
+      if (camp.soldiers >= CAMP_MAX) return false;
+      const a = raiseArmy(w, f, src, goal, best, Math.min(size, CAMP_MAX - camp.soldiers + 10));
+      if (!a) return false;
+      if (!sendToCamp(w, a, camp)) return true;
+      return true;
+    }
+  }
   return !!raiseArmy(w, f, src, goal, best, size);
 }
 

@@ -26,6 +26,7 @@ export class MapRenderer {
   /** 최근 큰 사건의 자리 (지도 위 표시) */
   showPins = true;
   selectedCaravan = -1;
+  selectedCamp = -1;
   pins: { l: number; x: number; y: number; imp: number; age: number }[] = [];
   selectedChar = -1;
   selectedSettlement = -1;
@@ -455,7 +456,7 @@ export class MapRenderer {
         if (c.died >= 0 || c.l !== cam.l) continue;
         if (c.act.kind === 'army' || c.act.kind === 'colonize' || c.act.kind === 'voyage' || c.act.kind === 'fleet') continue;
         // 상단을 이끄는 이는 수레로 그린다 (군대 표시를 끄면 사람으로 보인다)
-        if (c.act.kind === 'caravan' && this.showArmies) continue;
+        if ((c.act.kind === 'caravan' || c.act.kind === 'camp') && this.showArmies) continue;
         const special = c.race === 'dragon' || isHero(c) || w.demonLord === c.id || c.isPlayer || c.id === this.selectedChar || w.factions[c.faction]?.leader === c.id;
         // 개간하러 나간 이들은 멀리서도 보인다 (땅이 넓어지는 모습)
         const working = false;
@@ -478,6 +479,23 @@ export class MapRenderer {
           glyph(ctx, '⚒', sx + Math.max(5, s * 0.55), sy - Math.max(5, s * 0.55));
         }
       }
+    }
+    // 주둔지: 세력 색 천막, 그리고 노리는 적 고을까지 이어진 전선
+    if (this.showArmies) for (const k of w.camps ?? []) {
+      if (!k.alive || k.l !== cam.l) continue;
+      const [sx, sy] = this.toScreen(k.x + 0.5, k.y + 0.5);
+      const front = w.settlements[k.front];
+      if (front && front.alive && front.l === k.l) {
+        const [tx, ty] = this.toScreen(front.x + 0.5, front.y + 0.5);
+        ctx.save(); ctx.setLineDash([3, 4]); ctx.strokeStyle = 'rgba(255,80,60,0.55)'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(tx, ty); ctx.stroke(); ctx.restore();
+      }
+      const u = Math.max(4, s * 0.45);
+      const col = w.factions[k.faction]?.color ?? '#c04040';
+      ctx.fillStyle = col; ctx.strokeStyle = this.selectedCamp === k.id ? '#ffffff' : 'rgba(0,0,0,0.85)'; ctx.lineWidth = this.selectedCamp === k.id ? 2.5 : 1.5;
+      ctx.beginPath(); ctx.moveTo(sx, sy - u); ctx.lineTo(sx + u, sy + u * 0.7); ctx.lineTo(sx - u, sy + u * 0.7); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#1a0c08'; ctx.fillRect(sx - u * 0.18, sy - u * 0.05, u * 0.36, u * 0.75);
+      if (s >= 6) { ctx.font = `${Math.max(9, s * 0.6)}px sans-serif`; ctx.fillStyle = '#ffd8c8'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(Math.round(k.soldiers)), sx, sy + u * 1.5); }
     }
     // 상단: 짐을 실은 행렬
     if (this.showArmies) for (const k of w.caravans ?? []) {

@@ -10,11 +10,24 @@ import { EPITHETS } from '../data/names';
 import { addNews, charLog } from './news';
 import { MOVE_FLY, MOVE_WALK, advance, findPath, posOf } from './path';
 import type { Army, ArmyGoal, Character, Faction, Pos, Settlement, World } from './state';
+import { campsMonth, joinCamp, returnToCamp } from './camps';
 import { addFacRel, charLabel, clamp, isAdult, leaderOf, rel, charPower } from './helpers';
 import { awaken, killChar, setPos } from './characters';
 import { aggrieve, fallFaction, invalidateDist, transferSettlement } from './factions';
 import { foundSettlement, hasFlag } from './settlements';
 import { allowsSlavery, enslaveChar, takeSlaves } from './slavery';
+
+/** 이미 모인 병력으로 그 자리에서 군대를 세운다 (주둔지의 출격) */
+export function armyAt(w: World, f: Faction, at: Pos, goal: ArmyGoal, target: Settlement, size: number, path: number[], home: number, cmd: Character | null): Army {
+  const a: Army = {
+    id: w.armies.length, faction: f.id, race: f.race, commander: cmd ? cmd.id : -1, soldiers: Math.round(size), goal,
+    target: target.id, home, path, loot: new Array(RES_COUNT).fill(0), alive: true,
+    l: at.l, x: at.x, y: at.y, pl: at.l, px: at.x, py: at.y, age: 0,
+  };
+  w.armies.push(a);
+  if (cmd) { cmd.act = { kind: 'army', target: a.id }; charLog(w, cmd, `주둔지에서 군세 ${a.soldiers}명을 이끌고 ${target.name}(으)로 출격하였다.`, 2); }
+  return a;
+}
 
 export function raiseArmy(
   w: World, f: Faction, from: Settlement, goal: ArmyGoal, target: Settlement | null, size: number,
@@ -105,6 +118,7 @@ export function pAttackWin(w: World, a: Army, s: Settlement): number {
 }
 
 export function armiesMonth(w: World): void {
+  campsMonth(w);
   for (const a of w.armies) {
     if (!a.alive) continue;
     a.pl = a.l; a.px = a.x; a.py = a.y;
@@ -159,6 +173,7 @@ function disband(w: World, a: Army): void {
 }
 
 function goHomeArmy(w: World, a: Army): void {
+  if (a.camp !== undefined && !a.toCamp && returnToCamp(w, a)) { a.goal = 'return'; a.age = 0; return; }
   const home = w.settlements[a.home];
   const f = w.factions[a.faction];
   let dest = home && home.alive && home.faction === a.faction ? home : null;
@@ -176,6 +191,8 @@ function arrive(w: World, a: Army): void {
   const rng = w.rngSim;
   const f = w.factions[a.faction];
   if (!f || !f.alive) { disband(w, a); return; }
+  // 주둔지로 가던 군대는 합류한다 (주둔지가 사라졌으면 고향으로)
+  if (a.toCamp) { if (joinCamp(w, a)) return; a.toCamp = false; a.camp = undefined; goHomeArmy(w, a); return; }
   if (a.goal === 'return') {
     const s = w.settlements[a.home];
     if (s && s.alive) {

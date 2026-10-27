@@ -235,7 +235,7 @@ export function startExpedition(w: World, c: Character, siteId?: number): string
 
 /** 다른 곳으로 옮겨 간다: 가까우면 바로, 멀면 실제로 길을 걸어간다 (순간이동 금지) */
 export function relocate(w: World, c: Character, dest: Pos): void {
-  if (c.act.kind === 'army' || c.act.kind === 'colonize' || c.act.kind === 'party' || c.act.kind === 'voyage' || c.act.kind === 'fleet' || c.act.kind === 'caravan') return;
+  if (c.act.kind === 'army' || c.act.kind === 'colonize' || c.act.kind === 'party' || c.act.kind === 'voyage' || c.act.kind === 'fleet' || c.act.kind === 'caravan' || c.act.kind === 'camp') return;
   if (c.l === dest.l && Math.hypot(c.x - dest.x, c.y - dest.y) <= 3) { setPos(c, dest); return; }
   if (c.act.kind === 'travel' && c.act.purpose === 'return' && c.act.dest && c.act.dest.l === dest.l && c.act.dest.x === dest.x && c.act.dest.y === dest.y) return;
   const keep = c.act;
@@ -541,6 +541,12 @@ export function characterMonth(w: World, c: Character): void {
   }
   if (c.act.kind === 'party' || c.act.kind === 'voyage' || c.act.kind === 'fleet') return;
   // 상단을 이끄는 중: 상단이 함께 움직인다. 상단이 사라졌으면 일상으로
+  // 주둔지를 지키는 중
+  if (c.act.kind === 'camp') {
+    const k = w.camps?.[c.act.target ?? -1];
+    if (!k || !k.alive || k.commander !== c.id) c.act = { kind: 'idle' };
+    return;
+  }
   if (c.act.kind === 'caravan') {
     const k = w.caravans?.[c.act.target ?? -1];
     if (!k || !k.alive || !k.crew.includes(c.id)) c.act = { kind: 'idle' };

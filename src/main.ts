@@ -58,7 +58,7 @@ function unlockAchv(id: string, save: boolean) {
 const SPEEDS = [20000, 10000, 5000, 2000];
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
-type Inspect = { kind: 'none' } | { kind: 'char'; id: number } | { kind: 'set'; id: number } | { kind: 'fac'; id: number } | { kind: 'house'; id: number } | { kind: 'caravan'; id: number } | { kind: 'tile'; l: number; x: number; y: number };
+type Inspect = { kind: 'none' } | { kind: 'char'; id: number } | { kind: 'set'; id: number } | { kind: 'fac'; id: number } | { kind: 'house'; id: number } | { kind: 'caravan'; id: number } | { kind: 'camp'; id: number } | { kind: 'tile'; l: number; x: number; y: number };
 
 const S = {
   w: null as World | null,
@@ -321,6 +321,7 @@ function updateInspect() {
   const top = box.scrollTop;
   const I = S.inspect;
   renderer.selectedCaravan = I.kind === 'caravan' ? I.id : -1;
+  renderer.selectedCamp = I.kind === 'camp' ? I.id : -1;
   let html = '<p class="dim">지도에서 정착지·인물·땅을 클릭하세요.</p>';
   let actions = '';
   if (I.kind === 'char') {
@@ -336,6 +337,9 @@ function updateInspect() {
   } else if (I.kind === 'house') {
     html = P.inspectHouse(w, w.houses[I.id]);
     actions = '<button class="mini" id="ins-goto">영지로</button>';
+  } else if (I.kind === 'camp') {
+    const k = w.camps?.[I.id];
+    if (k) { html = P.inspectCamp(w, k); actions = '<button class="mini" id="ins-goto">위치로</button>'; }
   } else if (I.kind === 'caravan') {
     const k = w.caravans?.[I.id];
     if (k) { html = P.inspectCaravan(w, k); actions = k.alive ? '<button class="mini" id="ins-goto">위치로</button>' : ''; }
@@ -355,6 +359,7 @@ function updateInspect() {
     if (I.kind === 'fac') { const cap = w.settlements[w.factions[I.id].capital]; if (cap) jumpTo(cap); }
     if (I.kind === 'house') { const s = w.settlements[w.houses[I.id].seat]; if (s) jumpTo(s); }
     if (I.kind === 'caravan') { const k = w.caravans?.[I.id]; if (k) jumpTo(k); }
+    if (I.kind === 'camp') { const k = w.camps?.[I.id]; if (k) jumpTo(k); }
   });
 }
 
@@ -519,6 +524,9 @@ function clickMap(sx: number, sy: number) {
     const c = w.chars.find(c => c.died < 0 && c.l === l && c.x === tx && c.y === ty && c.act.kind !== 'army' && c.act.kind !== 'colonize');
     if (c) { selectChar(c.id, false); return; }
   }
+  // 주둔지
+  const cp = renderer.showArmies ? (w.camps ?? []).find(k => k.alive && k.l === l && Math.abs(k.x - tx) <= 1 && Math.abs(k.y - ty) <= 1) : undefined;
+  if (cp) { S.inspect = { kind: 'camp', id: cp.id }; renderer.selectedChar = -1; renderer.selectedSettlement = -1; renderer.selectedTile = null; updateInspect(); return; }
   // 상단: 그 칸이나 바로 옆 칸 (움직이는 중이라 조금 너그럽게)
   const k = renderer.showArmies ? (w.caravans ?? []).find(k => k.alive && k.l === l && Math.abs(k.x - tx) <= 1 && Math.abs(k.y - ty) <= 1) : undefined;
   if (k) {
@@ -727,6 +735,8 @@ function hover(e: MouseEvent) {
   for (const c of cs) parts.push(P.esc(`${c.epithet ? c.epithet + ' ' : ''}${c.name}`));
   const a = w.armies.find(a => a.alive && a.l === l && a.x === tx && a.y === ty);
   if (a) parts.push(`${P.esc(w.factions[a.faction]?.name ?? '')} 군대 ${Math.round(a.soldiers)}명`);
+  const cpv = (w.camps ?? []).find(k => k.alive && k.l === l && Math.abs(k.x - tx) <= 1 && Math.abs(k.y - ty) <= 1);
+  if (cpv) parts.push(`${P.esc(cpv.name)} · 병력 ${Math.round(cpv.soldiers)} → ${P.esc(w.factions[cpv.enemy]?.name ?? '')} <small>(눌러서 자세히)</small>`);
   const kv = (w.caravans ?? []).find(k => k.alive && k.l === l && Math.abs(k.x - tx) <= 1 && Math.abs(k.y - ty) <= 1);
   if (kv) parts.push(`${P.esc(w.factions[kv.fac]?.name ?? '')}의 상단 · ${RES_NAMES[kv.res]} → ${P.esc(w.settlements[kv.to]?.name ?? '')} <small>(눌러서 자세히)</small>`);
   const site = w.sites.find(s => s.l === l && s.x === tx && s.y === ty);

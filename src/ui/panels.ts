@@ -14,6 +14,7 @@ import { currentStories, storyIcon, storyYears } from '../sim/stories';
 import { knows } from '../sim/contact';
 import { TENET_DESC, TENET_NAME, clergyTitle, faithOf } from '../sim/religion';
 import type { Caravan } from '../sim/caravan';
+import type { Camp } from '../sim/camps';
 import { capacity } from '../sim/settlements';
 import { ACHIEVEMENTS, TIER_COLORS, TIER_NAMES } from '../sim/achievements';
 import { artLabel, vigor, vigorWord } from '../sim/artifacts';
@@ -127,7 +128,7 @@ export function inspectChar(w: World, c: Character, secret: boolean): string {
   }
   for (const it of c.items) tags.push(`<span class="chip">${esc(it)}</span>`);
   const where = c.act.kind === 'travel' ? `여행 중 (${{ adventure: '모험', trade: '교역', visit: '방문', hunt: '토벌', return: '귀환', pilgrim: '순례', duel: '결전', flee: '피난', clear: '개간지로', muster: '괴수 토벌 집결지로' }[c.act.purpose ?? 'visit']})`
-    : c.act.kind === 'clear' ? `${esc(w.settlements[c.act.target ?? -1]?.name ?? '')} 바깥의 땅을 개간하는 중` : c.act.kind === 'army' ? '출정 중' : c.act.kind === 'colonize' ? '이주 행렬 인솔 중' : c.act.kind === 'caravan' ? '교역 중 (상단 인솔)' : (c.sleep ?? 0) > 0 ? `잠듦 (${c.sleep}개월)` : '머무는 중';
+    : c.act.kind === 'clear' ? `${esc(w.settlements[c.act.target ?? -1]?.name ?? '')} 바깥의 땅을 개간하는 중` : c.act.kind === 'army' ? '출정 중' : c.act.kind === 'colonize' ? '이주 행렬 인솔 중' : c.act.kind === 'caravan' ? '교역 중 (상단 인솔)' : c.act.kind === 'camp' ? '주둔지 지휘' : (c.sleep ?? 0) > 0 ? `잠듦 (${c.sleep}개월)` : '머무는 중';
   const fam: string[] = [];
   if (c.father >= 0) fam.push(`부: ${charLink(w, w.chars[c.father], w.chars[c.father].name)}`);
   if (c.mother >= 0) fam.push(`모: ${charLink(w, w.chars[c.mother], w.chars[c.mother].name)}`);
@@ -438,6 +439,7 @@ export function legendHTML(): string {
     ['⚔', '#ff5a4a', '군대'],
     ['⚑', '#9ad06a', '이주민'],
     ['▣', '#e8c060', '상단 (교역 짐수레)'],
+    ['▲', '#e05040', '주둔지 (붉은 점선: 전선)'],
     ['Ω', '#f0dca0', '유적'],
     ['▼', '#f0dca0', '던전'],
     ['†', '#8a8070', '무너진 신전 터'],
@@ -530,6 +532,23 @@ export function artifactsTab(w: World, sel: number): string {
     }).join('')}</table></div>
     <div><div class="ins-h">${esc(artLabel(a))}</div><div class="ins-sub">${dateStr(w, a.t)} 제작 · ${a.tangible ? `힘 +${a.power}` : '작품'} · 명성 ${Math.round(a.fame)} · 명맥 ${bar(a)} ${vigorWord(a)}</div>
     <div>${where}</div><div class="sec">내력</div><div class="log">${a.story.map(s2 => `<div><span class="when">${dateStr(w, s2.t)}</span>${esc(s2.text)}</div>`).join('')}</div></div></div>`;
+}
+
+/** 주둔지 정보창 */
+export function inspectCamp(w: World, k: Camp): string {
+  const f = w.factions[k.faction], e = w.factions[k.enemy], home = w.settlements[k.home], front = w.settlements[k.front];
+  const out = w.armies.filter(a => a.alive && a.camp === k.id && !a.toCamp);
+  const coming = w.armies.filter(a => a.alive && a.camp === k.id && a.toCamp);
+  return `<div class="ins-h"><span class="swatch" style="background:${f?.color ?? '#888'}"></span>${esc(k.name)}</div>
+    <div class="ins-sub">${esc(f?.name ?? '')}의 주둔지 · ${dateStr(w, k.t)}에 세움${k.alive ? '' : ' · 거둠'}</div>
+    <div class="kv">
+      <span>맞서는 적</span><span>${facLink(e)}</span>
+      <span>전선</span><span>${front ? setLink(front) : '-'}</span>
+      <span>병력</span><span>${Math.round(k.soldiers)}명${coming.length ? ` · 오는 중 ${coming.reduce((a, x) => a + x.soldiers, 0)}명` : ''}${out.length ? ` · 출격 중 ${out.reduce((a, x) => a + Math.round(x.soldiers), 0)}명` : ''}</span>
+      <span>지휘관</span><span>${w.chars[k.commander]?.died < 0 ? charLink(w, w.chars[k.commander]) : '<span class="dim">없음</span>'}</span>
+      <span>보급</span><span>${setLink(home)} <small>(병사 100명당 한 달 양식 2)</small></span>
+    </div>
+    <p class="dim">먼 적국을 칠 때는 길목에 주둔지를 세우고 병력을 모아 출격한다. 양식이 끊기면 병사가 흩어지고, 적에게 짓밟히면 무너진다. 전쟁이 끝나면 거둔다.</p>`;
 }
 
 /** 상단 정보창 */
