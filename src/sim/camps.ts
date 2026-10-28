@@ -36,16 +36,22 @@ export function campsAgainst(w: World, f: Faction, e: Faction): Camp[] {
   return (w.camps ?? []).filter(c => c.alive && c.faction === f.id && c.enemy === e.id);
 }
 
-/** 출발 고을에서 적 고을로 가는 길목에 주둔지 자리를 고른다: 제 땅이나 빈 땅 가운데 적에 가장 가까운 곳 */
+/** 출발 고을에서 적 고을로 가는 길목에 주둔지 자리를 고른다: 제 땅이나 빈 땅 가운데 적에 가장 가까운 곳.
+ *  길이 남의 땅으로 들어서거나 적의 주둔지 앞에 닿으면 거기서 멈춘다 (남의 땅이나 적 주둔지를 건너뛰어 그 너머에 세우지 않는다) */
 function frontSpot(w: World, f: Faction, from: Settlement, to: Settlement): Pos | null {
   const path = findPath(w, from, to, { race: from.race, flying: RACES[from.race].flying }, 40000);
   if (!path || path.length < 12) return null;
+  // 나와 싸우는 세력들이 세운 주둔지 (이 주둔지들이 전선이다)
+  const foes = (w.camps ?? []).filter(c => c.alive && c.faction !== f.id && f.wars[c.faction] !== undefined);
   let best: Pos | null = null;
-  for (let i = Math.floor(path.length * 0.35); i < Math.floor(path.length * 0.75); i++) {
+  for (let i = 1; i < Math.floor(path.length * 0.75); i++) {
     const p = posOf(w, path[i]);
     const L = w.layers[p.l];
     const owner = L.owner[p.y * L.w + p.x];
-    if (owner >= 0 && owner !== f.id) continue;
+    if (owner >= 0 && owner !== f.id) break;
+    // 적 주둔지에 닿았거나, 그 곁을 지나 적 고을 쪽으로 더 나아갔다
+    if (foes.some(c => c.l === p.l && (dist(c, p) <= 4 || (dist(c, p) < 12 && dist(p, to) < dist(c, to))))) break;
+    if (i < Math.floor(path.length * 0.25)) continue;
     if (w.settlements.some(s => s.alive && s.l === p.l && dist(s, p) < 3)) continue;
     best = p;
   }
@@ -66,6 +72,27 @@ export function ensureCamp(w: World, f: Faction, e: Faction, from: Settlement, t
   const camp: Camp = { id: w.camps.length, name: `${from.name} 주둔지`, faction: f.id, enemy: e.id, home: from.id, soldiers: 0, commander: -1, t: w.t, alive: true, front: to.id, l: p.l, x: p.x, y: p.y };
   w.camps.push(camp);
   addNews(w, `${f.name}이(가) ${e.name}과(와)의 싸움을 위해 ${to.name}을(를) 마주 보는 길목에 주둔지를 세웠다.`, 2, 'war', { pos: camp, facs: [f.id, e.id] });
+  return camp;
+}
+
+/** 들판의 싸움에서 이긴 군대가 그 자리에 진지를 세운다 (이미 가까이에 제 주둔지가 있으면 그것을 쓴다) */
+export function fieldCamp(w: World, f: Faction, e: Faction, at: Pos, homeId: number): Camp | null {
+  const home = w.settlements[homeId];
+  if (!home || !home.alive || home.faction !== f.id) return null;
+  const mine = campsAgainst(w, f, e);
+  const near = mine.find(c => c.l === at.l && dist(c, at) <= 10);
+  if (near) return near;
+  if (mine.length >= 3) return null;
+  if (w.settlements.some(s => s.alive && s.l === at.l && dist(s, at) < 3)) return null;
+  // 적 주둔지 코앞에는 세우지 않는다
+  if ((w.camps ?? []).some(c => c.alive && c.faction === e.id && c.l === at.l && dist(c, at) <= 4)) return null;
+  const front = settlementsOf(w, e).filter(s => s.l === at.l).sort((a, b) => dist(a, at) - dist(b, at))[0];
+  if (!front) return null;
+  const near2 = w.settlements.filter(s => s.alive && s.l === at.l).sort((a, b) => dist(a, at) - dist(b, at))[0];
+  w.camps ??= [];
+  const camp: Camp = { id: w.camps.length, name: `${near2 ? near2.name + ' 들판' : '들판'}의 진지`, faction: f.id, enemy: e.id, home: home.id, soldiers: 0, commander: -1, t: w.t, alive: true, front: front.id, l: at.l, x: at.x, y: at.y };
+  w.camps.push(camp);
+  addNews(w, `싸움에서 이긴 ${f.name}의 군대가 물러나지 않고 그 자리에 진지를 세웠다. ${e.name}을(를) 향한 전선이 한 걸음 나아갔다.`, 2, 'war', { pos: camp, facs: [f.id, e.id] });
   return camp;
 }
 

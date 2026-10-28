@@ -105,8 +105,8 @@ export const STORY: LifeEv[] = [
     o: [o('결투를 신청한다', { r: '', fx: 'duel', reap: 'rival_feud' }, '목숨을 건다'), o('화해를 청한다', { r: '오랜 앙금을 술 한잔에 털었다.', fx: 'friend', honor: 6, reap: 'rival_feud' }, '', ['ch', 0.5], { r: '{o}은(는) 술잔을 엎었다.', mood: -6, reap: 'rival_feud' })] },
 
   // 5) 스승
-  { id: 'st_mentor', t: '늙은 스승', w: 3, c: all(adult, idle, yearsInJob(1), notDone('mentor'), x => x.c.role !== '백수' && x.c.role !== '노예'),
-    data: x => ({ oId: local(x, Math.round(RACES[x.c.race].lifespan[0] * 0.72), x.c.role) }),
+  { id: 'st_mentor', t: '늙은 스승', w: 3, c: all(adult, idle, yearsInJob(1), notDone('mentor'), x => x.c.role !== '백수' && x.c.role !== '노예' && !!x.home),
+    data: x => { const id = local(x, Math.round(RACES[x.c.race].lifespan[0] * 0.72), x.c.role); return id >= 0 ? { oId: id } : null; },
     x: '늙은 {job} {o}이(가) 당신의 재능을 알아보았다. "내 모든 것을 가르쳐 주마."',
     o: [o('제자가 된다', { r: '{o}의 가르침은 엄하고도 깊었다.', in: 2, mi: 2, fx: 'friend', flag: 'story_mentor', seed: ['mentor', '스승 {o}의 가르침'] }),
       o('혼자 길을 가겠다고 한다', { r: '{o}은(는) 아쉬운 듯 웃었다.', flag: 'story_mentor' })] },

@@ -93,6 +93,15 @@ export function doomTick(w: World): void {
     }
   }
   w.stats.maxBroken = Math.max(w.stats.maxBroken ?? 0, brokenCount(w));
+  // 용의 원한은 세월 속에 옅어진다: 마흔 해 동안 새 원한이 없으면 하나가 풀린다
+  const g = w.doom.dragonGrievance;
+  if (g > (w.stats.prevGrievance ?? 0)) w.stats.lastGrievance = w.t;
+  if (g > 0 && w.t - (w.stats.lastGrievance ?? 0) >= 12 * 40) {
+    w.doom.dragonGrievance--;
+    w.stats.lastGrievance = w.t;
+    addNews(w, `세월이 흘러 용들의 원한이 조금 옅어졌다. (용의 원한 ${w.doom.dragonGrievance}/3)`, 2, 'nature');
+  }
+  w.stats.prevGrievance = w.doom.dragonGrievance;
   const p = pDoomMonth(w);
   if (p > 0 && w.rngSim.chance(p)) {
     w.doom.ended = true;

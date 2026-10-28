@@ -1,15 +1,27 @@
 // 주둔지: 얼마나 세워지고, 출격·합류·철수·함락이 실제로 일어나는가
 import { createWorld } from '../../src/sim/world';
 import { tick } from '../../src/sim/tick';
-import { yearOf } from '../../src/sim/state';
+import { dist, yearOf } from '../../src/sim/state';
 const argv: string[] = (globalThis as any).process.argv;
 for (const seed of (argv[2] ?? 'CP-1').split(',')) {
   const w = createWorld(seed);
   const y0 = yearOf(w);
   let last = -1, maxAlive = 0, sum = 0, n = 0, joins = 0, sorties = 0; const cnt: Record<string, number> = {}; const lines: string[] = [];
+  // 엇갈린 주둔지: 서로 싸우는 두 주둔지가 가까이 있으면서 서로 상대 고향 쪽으로 넘어가 있다 / 남의 땅 위의 주둔지
+  const crossed = new Set<string>(), foreign = new Set<number>();
   for (let i = 0; i < 12 * +(argv[3] ?? 200); i++) {
     tick(w);
     const alive = (w.camps ?? []).filter(c => c.alive);
+    if (i % 6 === 0) for (const a of alive) {
+      const L = w.layers[a.l], o = L.owner[a.y * L.w + a.x];
+      if (o >= 0 && o !== a.faction && w.t - a.t < 6) foreign.add(a.id);
+      const ah = w.settlements[a.home];
+      for (const b of alive) {
+        if (b.faction !== a.enemy || b.enemy !== a.faction || b.l !== a.l || b.id <= a.id || dist(a, b) > 12) continue;
+        const bh = w.settlements[b.home];
+        if (ah && bh && dist(a, bh) < dist(b, bh) && dist(b, ah) < dist(a, ah)) crossed.add(`${a.id}-${b.id}`);
+      }
+    }
     maxAlive = Math.max(maxAlive, alive.length); sum += alive.length; n++;
     for (const c of w.chars) if (c.died < 0 && c.log.length && c.log[c.log.length - 1].t === w.t) { const t = c.log[c.log.length - 1].text; if (/을\(를\) 맡았다|을 맡았다|를 맡았다/.test(t)) joins++; if (/주둔지에서 군세/.test(t)) sorties++; }
     for (const nw of w.news) {
@@ -19,6 +31,6 @@ for (const seed of (argv[2] ?? 'CP-1').split(',')) {
     }
     last = w.nextNewsId - 1;
   }
-  console.log(`== ${seed} 주둔지 누적 ${(w.camps ?? []).length}, 동시 최대 ${maxAlive}, 평균 ${(sum / n).toFixed(1)}, 지휘관 합류 ${joins}, 지휘 출격 ${sorties}`, JSON.stringify(cnt));
+  console.log(`== ${seed} 주둔지 누적 ${(w.camps ?? []).length}, 동시 최대 ${maxAlive}, 평균 ${(sum / n).toFixed(1)}, 지휘관 합류 ${joins}, 지휘 출격 ${sorties}, 엇갈림 ${crossed.size}, 남의땅(세울때) ${foreign.size}`, JSON.stringify(cnt));
   for (const l of lines) console.log('   ', l);
 }

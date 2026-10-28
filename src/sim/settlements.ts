@@ -66,7 +66,7 @@ export function capacity(w: World, s: Settlement): number {
   const byFood = R.needs[FOOD] > 0 ? (food * R.prodMul[FOOD] * mul * 0.95 / R.needs[FOOD]) * 20 : Infinity;
   const byMana = R.needs[MANA] >= 0.15 ? (mana * R.prodMul[MANA] * mul / R.needs[MANA]) * 20 * 1.2 : Infinity;
   // 마족은 수가 적다 (대신 하나하나가 강하다)
-  const cap = Math.min(byFood, byMana) * (s.race === 'majin' ? 0.45 : 1);
+  const cap = Math.min(byFood, byMana) * (s.race === 'majin' ? 0.8 : 1);
   return Math.max(60, isFinite(cap) ? cap : 400);
 }
 

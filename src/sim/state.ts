@@ -134,7 +134,7 @@ export interface Faction {
 
 export interface LogEntry { t: number; text: string; imp?: number }
 
-export type ActivityKind = 'idle' | 'travel' | 'army' | 'colonize' | 'party' | 'voyage' | 'fleet' | 'clear' | 'caravan' | 'camp';
+export type ActivityKind = 'idle' | 'travel' | 'army' | 'colonize' | 'party' | 'voyage' | 'fleet' | 'clear' | 'caravan' | 'camp' | 'prison';
 export interface Activity {
   kind: ActivityKind;
   purpose?: 'adventure' | 'trade' | 'visit' | 'hunt' | 'return' | 'pilgrim' | 'duel' | 'flee' | 'clear' | 'muster' | 'quest';
@@ -242,6 +242,10 @@ export interface Army extends Pos {
   camp?: number;
   /** 주둔지로 가는 중 (닿으면 합류한다) */
   toCamp?: boolean;
+  /** 길에서 적군과 맞닥뜨려 진을 치고 대치 중: 이때까지 움직이지 않고, 끝나면 맞붙는다 */
+  hold?: number;
+  /** 대치 중인 상대 군대 */
+  foe?: number;
 }
 
 export type NewsCat = 'war' | 'politics' | 'hero' | 'dark' | 'nature' | 'growth' | 'life' | 'trade' | 'doom' | 'player';

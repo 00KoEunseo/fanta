@@ -69,6 +69,8 @@ export interface SeaBeast {
   since?: number;
   /** 길들인 마왕 */
   tamedBy?: number;
+  /** 심연의 군주가 토해 낸 권속 (군주가 잠들면 함께 가라앉는다) */
+  abyss?: boolean;
   /** 맞서 싸운 세력과 실패 횟수 */
   fails: Record<number, number>;
   allies: number[];
@@ -120,6 +122,8 @@ export interface Muster {
   at: number;
   t: number;
   done: boolean;
+  /** 심연의 군주의 촉수를 치러 모였다 (촉수 번호) */
+  tentacle?: number;
 }
 
 // ───────────── 바다의 생김새 (세계마다 한 번 계산)
@@ -693,6 +697,11 @@ function retreatBeast(w: World, b: SeaBeast) {
 function slayBeast(w: World, b: SeaBeast, by: string, heroes: Character[]) {
   b.alive = false;
   b.hp = 0;
+  const V = w.sea.leviathan;
+  if (b.abyss && V?.active) {
+    const t = V.tentacles.filter(x => x.alive).sort((p, q) => Math.hypot(p.x - b.x, p.y - b.y) - Math.hypot(q.x - b.x, q.y - b.y))[0];
+    if (t) t.hp -= 60;
+  }
   stirAbyss(w, 0.01, `${b.name}의 피가 바다 밑으로 끝없이 가라앉아, 잠든 것의 입술을 적셨다.`, heroes[0]);
   for (const c of heroes) { c.fame += 30; c.honor += 10; charLog(w, c, `${b.name}을(를) 쓰러뜨렸다.`, 4); }
   w.stats.beastsSlain = (w.stats.beastsSlain ?? 0) + 1;
@@ -764,6 +773,7 @@ function startMuster(w: World, b: SeaBeast, f: Faction, allies: Faction[], victi
 
 /** 수비대의 한 달: 다 모이면 싸우고, 괴수가 떠났으면 흩어진다 */
 function musterMonth(w: World, m: Muster): void {
+  if (m.tentacle !== undefined) { tentacleMusterMonth(w, m); return; }
   const b = w.sea.beasts[m.beast];
   const f = w.factions[m.faction];
   const at = w.settlements[m.at];
@@ -861,7 +871,7 @@ function beastMonth(w: World, b: SeaBeast): void {
   switch (b.mode) {
     case 'approach': {
       // 천천히 다가온다 (두 달에 한 칸)
-      if (w.t % 2 === b.id % 2) step();
+      if (b.abyss || w.t % 2 === b.id % 2) step();
       // 항구 앞바다(항구 칸은 고을에서 최대 7칸 남짓)에 닿으면 해안을 덮친다
       const near = !!tgt && tgt.alive && (Math.hypot(b.x - tgt.x, b.y - tgt.y) <= 7.5 || (!b.route.length && tileOf(w, b) === portTile(w, tgt)));
       if (near) {
@@ -928,6 +938,9 @@ function beastMonth(w: World, b: SeaBeast): void {
 
 // ───────────── 심연의 군주 (숨겨진 일곱 번째 봉인)
 
+/** 촉수 하나의 체력 */
+export const TENTACLE_HP = 380;
+
 const LEV_NAMES = ['크툴라', '다고스', '느갈로스', '요그타르', '하스투르', '이브르흐', '르흘레스'];
 
 export function awakenLeviathan(w: World, cause = '', by?: Character): boolean {
@@ -952,10 +965,11 @@ export function awakenLeviathan(w: World, cause = '', by?: Character): boolean {
   const eye = xyOf(w, rng.pick(G.deep));
   const name = `심연의 군주 ${rng.pick(LEV_NAMES)}`;
   w.sea.leviathan = {
-    name, t: w.t, active: true, ended: -1, cause: cause || undefined, by: by?.id, tentacles: picks.map(k => ({ l: L, ...xyOf(w, k), hp: 250, alive: true })), alliance: [], leader: -1, eye,
+    name, t: w.t, active: true, ended: -1, cause: cause || undefined, by: by?.id, tentacles: picks.map(k => ({ l: L, ...xyOf(w, k), hp: TENTACLE_HP, alive: true })), alliance: [], leader: -1, eye,
   };
   w.sea.leviathans++;
   w.sea.lastLeviathan = w.t;
+  for (let i = 0; i < 2; i++) spawnAbyss(w, w.sea.leviathan);
   addNews(w, `${cause ? cause + ' ' : ''}바다가 끓어올랐다. 대륙만 한 그림자가 수면 아래에서 몸을 뒤척였다. ${name}이(가) 깨어나 ${picks.length}개의 촉수를 해안마다 뻗었다. 아무도 그 몸의 끝을 보지 못하였다.`, 5, 'doom', { chars: by ? [by.id] : [] });
   if (by) charLog(w, by, `${name}을(를) 깨웠다.`, 5);
   return true;
@@ -973,12 +987,101 @@ export function stirAbyss(w: World, p: number, cause: string, by?: Character): b
   return true;
 }
 
+const ABYSS_KINDS = ['촉수 괴물', '익사자의 무리', '심해 아귀', '껍질 짐승', '산호 거인'];
+
+/** 심연의 군주가 권속을 토해 낸다: 촉수 곁에서 솟아 가까운 항구로 헤엄쳐 간다 */
+function spawnAbyss(w: World, V: Leviathan): boolean {
+  const rng = w.rngSim;
+  const alive = V.tentacles.filter(t => t.alive);
+  if (!alive.length) return false;
+  const t = rng.pick(alive);
+  const ports = w.settlements.filter(s => isPort(w, s) && s.pop > 60 && Math.hypot(s.x - t.x, s.y - t.y) < 40)
+    .sort((a, b) => Math.hypot(a.x - t.x, a.y - t.y) - b.pop * 0.02 - (Math.hypot(b.x - t.x, b.y - t.y) - a.pop * 0.02));
+  for (const tgt of ports.slice(0, 4)) {
+    const route = seaPath(w, tileOf(w, t), portTile(w, tgt));
+    if (!route) continue;
+    const kind = rng.pick(ABYSS_KINDS);
+    const hp = rng.int(220, 360);
+    const b: SeaBeast = {
+      id: w.sea.beasts.length, l: L, name: `심연의 권속 ${kind}`, kind, x: t.x, y: t.y, px: t.x, py: t.y,
+      hp, maxHp: hp, power: rng.int(240, 340), target: tgt.id, route, ashore: false, mode: 'approach', since: w.t,
+      fails: {}, allies: [], caller: -1, t: w.t, alive: true, abyss: true,
+    };
+    w.sea.beasts.push(b);
+    addNews(w, `${V.name}의 촉수 곁에서 ${b.name}이(가) 기어 나와 ${tgt.name} 쪽으로 헤엄치기 시작하였다.`, 3, 'doom', { pos: b, facs: [tgt.faction] });
+    return true;
+  }
+  return false;
+}
+
+/** 촉수를 치러 해안에 사람을 모은다 (근처의 싸울 만한 이들이 집결지로 걸어간다) */
+function startTentacleMuster(w: World, V: Leviathan, f: Faction, ti: number, allies: Faction[]): boolean {
+  const t = V.tentacles[ti];
+  const at = w.settlements.filter(s => s.alive && s.l === L && s.faction === f.id && Math.hypot(s.x - t.x, s.y - t.y) <= 16)
+    .sort((a, b) => Math.hypot(a.x - t.x, a.y - t.y) - Math.hypot(b.x - t.x, b.y - t.y))[0];
+  if (!at) return false;
+  const ids = new Set(allies.map(a => a.id));
+  const cands = w.chars.filter(c => c.died < 0 && ids.has(c.faction) && !c.isPlayer && isAdult(w, c) && c.act.kind === 'idle' && c.race !== 'dragon' && c.role !== '노예'
+    && (isHero(c) || ['전사', '기사', '모험가', '마법사', '선원', '사냥꾼', '성직자'].includes(c.role)) && c.l === at.l && Math.hypot(c.x - at.x, c.y - at.y) < 40
+    && w.factions[c.faction]?.leader !== c.id)
+    .sort((a, c) => charPower(c, w) - charPower(a, w)).slice(0, 7);
+  if (cands.length < 2) return false;
+  w.sea.musters ??= [];
+  const m: Muster = { id: w.sea.musters.length, beast: -1, tentacle: ti, faction: f.id, allies: allies.map(a => a.id), members: [], at: at.id, t: w.t, done: false };
+  for (const c of cands) {
+    if (Math.hypot(c.x - at.x, c.y - at.y) <= 3) { c.act = { kind: 'party', target: -2 - m.id }; m.members.push(c.id); continue; }
+    if (setTravel(w, c, at, 'muster', m.id)) m.members.push(c.id);
+  }
+  if (m.members.length < 2) { for (const id of m.members) w.chars[id].act = { kind: 'idle' }; return false; }
+  w.sea.musters.push(m);
+  for (const id of m.members) charLog(w, w.chars[id], `${V.name}의 촉수를 베러 ${at.name}의 해안으로 소집되었다.`, 2);
+  addNews(w, `${f.name}의 부름에 ${m.members.map(id => w.chars[id].name).join(', ')}이(가) ${V.name}의 촉수와 싸우러 ${at.name}의 해안으로 향한다.`, 3, 'hero', { pos: at, facs: [f.id], chars: m.members });
+  return true;
+}
+
+/** 촉수 토벌대의 한 달: 다 모이면 촉수에 맞선다 */
+function tentacleMusterMonth(w: World, m: Muster): void {
+  const rng = w.rngSim;
+  const V = w.sea.leviathan;
+  const at = w.settlements[m.at];
+  const members = m.members.map(id => w.chars[id]).filter(c => c && c.died < 0);
+  const here = members.filter(c => c.act.kind === 'party' && c.act.target === -2 - m.id);
+  const coming = members.filter(c => c.act.kind === 'travel' && c.act.purpose === 'muster' && c.act.target === m.id);
+  const end = () => { m.done = true; for (const c of [...here, ...coming]) { c.act = { kind: 'idle' }; const h = w.settlements[c.home]; if (h && h.alive) relocate(w, c, h); } };
+  const t = V?.active ? V.tentacles[m.tentacle!] : undefined;
+  if (!V || !t || !t.alive || !at || !at.alive) { end(); return; }
+  if (!here.length || (coming.length && w.t - m.t < 8)) return;
+  const allies = m.allies.map(id => w.factions[id]).filter(a => a && a.alive);
+  const pp = here.reduce((a, c) => a + charPower(c, w), 0) * (1 + 0.12 * (here.length - 1)) + allies.reduce((a, o) => a + Math.sqrt(Math.max(0, o.military)) * 2, 0);
+  const win = rng.chance(pp / (pp + 380));
+  const fallen: Character[] = [];
+  for (const h of here) if (rng.chance((win ? 0.12 : 0.4) * clamp(1.3 - charPower(h, w) / 250, 0.4, 1.3))) { fallen.push(h); killChar(w, h, `${V.name}의 촉수에 휘감겨 전사`); }
+  const alive = here.filter(h => !fallen.includes(h));
+  const who = here.map(h => h.name).join(', ');
+  const loss = fallen.length ? ` ${fallen.map(h => h.name).join(', ')}은(는) 바다로 끌려 들어가 돌아오지 못하였다.` : '';
+  const where = { pos: { l: L, x: t.x, y: t.y }, chars: here.map(c => c.id), facs: allies.map(a => a.id) };
+  if (win) {
+    t.hp -= rng.float(40, 90) * Math.min(1.8, pp / 300);
+    for (const h of alive) { h.fame += 12; charLog(w, h, `${V.name}의 촉수와 싸워 깊은 상처를 입혔다.`, 3); }
+    if (t.hp <= 0) {
+      t.alive = false;
+      for (const h of alive) { h.fame += 25; h.honor += 10; charLog(w, h, `${V.name}의 촉수 하나를 베어 냈다.`, 4); }
+      const cut = V.tentacles.filter(x => !x.alive).length;
+      addNews(w, `${who}이(가) ${at.name}의 해안에서 ${V.name}의 촉수 하나를 베어 냈다. (${cut}/${V.tentacles.length})${loss}`, 4, 'hero', where);
+    } else addNews(w, `${who}이(가) ${at.name}의 해안에서 ${V.name}의 촉수에 맞서 깊은 상처를 입혔다.${loss}`, 3, 'hero', where);
+  } else {
+    addNews(w, `${who}이(가) ${V.name}의 촉수에 맞섰으나 바다가 그들을 집어삼켰다.${loss}`, 3, 'doom', where);
+  }
+  end();
+}
+
 function leviathanMonth(w: World): void {
   const rng = w.rngSim;
   const V = w.sea.leviathan;
   if (!V || !V.active) return;
   const alive = V.tentacles.filter(t => t.alive);
-  // 촉수 주변 10칸을 괴롭힌다
+  const G = geo(w);
+  // 촉수 곁의 고을은 늘 두려움 속에 산다 (조금씩 줄고, 곳간이 비고, 민심이 흔들린다)
   const hurtIds = new Set<number>();
   for (const t of alive) {
     for (const s of w.settlements) {
@@ -986,20 +1089,46 @@ function leviathanMonth(w: World): void {
       const d = Math.hypot(s.x - t.x, s.y - t.y);
       if (d > 10) continue;
       const k = 1 - d / 12;
-      s.pop -= s.pop * rng.float(0.008, 0.025) * k;
-      s.stock[FOOD] *= 1 - 0.1 * k;
-      s.stability = Math.max(0, s.stability - 3.5 * k);
-      s.lastAttacked = w.t;
+      s.pop -= s.pop * rng.float(0.002, 0.006) * k;
+      s.stock[FOOD] *= 1 - 0.05 * k;
+      s.stability = Math.max(0, s.stability - 2 * k);
       hurtIds.add(s.faction);
-      disasterStrikes(w, s, 'abyss', '심연의 촉수에 끌려 바다로 사라짐', 0.004 * k);
     }
     for (const a of w.armies) if (a.alive && a.l === L && Math.hypot(a.x - t.x, a.y - t.y) < 5) a.soldiers *= 0.82;
   }
-  if (rng.chance(0.06) && alive.length) {
-    const t = rng.pick(alive);
-    const s = w.settlements.filter(o => o.alive && o.l === L && Math.hypot(o.x - t.x, o.y - t.y) <= 10)[0];
-    if (s) addNews(w, `${V.name}의 촉수가 ${s.name}의 해안을 휩쓸었다. 집과 사람이 함께 바다로 끌려 들어갔다.`, 3, 'doom', { pos: s, facs: [s.faction] });
+  // 촉수가 해안을 내리친다: 가까운 고을 하나를 골라 크게 휩쓴다
+  for (const t of alive) {
+    if (!rng.chance(0.07)) continue;
+    const s = w.settlements.filter(o => o.alive && o.l === L && !spared(w, o.faction) && Math.hypot(o.x - t.x, o.y - t.y) <= 10)
+      .sort((a, b) => Math.hypot(a.x - t.x, a.y - t.y) - Math.hypot(b.x - t.x, b.y - t.y))[0];
+    if (!s) continue;
+    const killed = Math.round(s.pop * rng.float(0.05, 0.12));
+    s.pop -= killed;
+    s.stock[FOOD] *= 0.7;
+    s.dev = Math.max(0, s.dev - rng.float(2, 5));
+    s.lastAttacked = w.t;
+    w.corpses += killed;
+    disasterStrikes(w, s, 'abyss', '심연의 촉수에 끌려 바다로 사라짐', 0.03);
+    if (rng.chance(0.5)) addNews(w, `${V.name}의 촉수가 ${s.name}을(를) 내리쳤다. 집과 사람이 함께 바다로 끌려 들어갔다. (${killed}명)`, 3, 'doom', { pos: s, facs: [s.faction] });
   }
+  // 촉수는 한자리에 머물지 않는다: 사람 냄새가 짙은 해안으로 미끄러져 간다
+  if (G.coastSea.length) for (const t of alive) {
+    if (!rng.chance(1 / 8)) continue;
+    const prey = w.settlements.filter(o => o.alive && o.l === L && !spared(w, o.faction) && Math.hypot(o.x - t.x, o.y - t.y) < 30).sort((a, b) => b.pop - a.pop)[0];
+    if (!prey) continue;
+    let best = -1, bd = Infinity;
+    for (let i = 0; i < 40; i++) {
+      const k = G.coastSea[rng.int(0, G.coastSea.length - 1)];
+      const p = xyOf(w, k);
+      if (Math.hypot(p.x - t.x, p.y - t.y) > 8) continue;
+      if (V.tentacles.some(o => o !== t && o.alive && Math.hypot(o.x - p.x, o.y - p.y) < 6)) continue;
+      const d = Math.hypot(p.x - prey.x, p.y - prey.y);
+      if (d < bd) { bd = d; best = k; }
+    }
+    if (best >= 0 && bd < Math.hypot(t.x - prey.x, t.y - prey.y)) { const p = xyOf(w, best); t.x = p.x; t.y = p.y; }
+  }
+  // 권속을 토해 낸다 (군주가 깨어 있는 동안 넷까지)
+  if (w.sea.beasts.filter(b => b.alive && b.abyss).length < 4 && rng.chance(1 / 14)) spawnAbyss(w, V);
   const hurt = [...hurtIds].map(id => w.factions[id]).filter(f => f && f.alive && !RACES[f.race].noPop);
   // 연맹: 피해를 크게 입은 나라가 맹주가 되어 연맹을 꾸린다
   if (V.leader < 0 && hurt.length && (w.t - V.t >= 4)) {
@@ -1016,19 +1145,21 @@ function leviathanMonth(w: World): void {
     }
     addNews(w, `${lead.name}의 이름으로 '심연 토벌 연맹'이 결성되었다. ${V.alliance.map(id => w.factions[id].name).join(', ')}이(가) 원한을 접고 해안으로 군대를 보냈다.`, 5, 'hero', { facs: V.alliance });
   }
-  // 촉수를 친다
+  // 촉수를 친다: 싸울 이들을 해안에 불러 모으고 (걸어서 모인다), 모을 이가 없으면 군대만 보낸다
   const members = V.leader >= 0 ? V.alliance.map(id => w.factions[id]).filter(f => f && f.alive) : hurt;
   for (const f of members) {
-    if (!rng.chance(V.leader >= 0 ? 0.2 : 0.1)) continue;
+    if (!rng.chance(V.leader >= 0 ? 0.12 : 0.06)) continue;
     const caps = w.settlements[f.capital];
     if (!caps || caps.l !== L) continue;
-    // 연맹은 상처 입은 촉수부터 함께 노린다
     const score = (x: Tentacle) => Math.hypot(x.x - caps.x, x.y - caps.y) + (V.leader >= 0 ? x.hp * 0.3 : 0);
     const t = alive.filter(x => x.alive).sort((a, b) => score(a) - score(b))[0];
     if (!t) break;
-    const { p, heroes } = sortiePower(w, f, caps.l === L ? t : caps);
+    const ti = V.tentacles.indexOf(t);
+    if ((w.sea.musters ?? []).some(m => !m.done && m.tentacle === ti)) continue;
+    if (startTentacleMuster(w, V, f, ti, V.leader >= 0 ? members : [f])) continue;
+    const { p, heroes } = sortiePower(w, f, t);
     const pp = p * (V.leader >= 0 ? 1.4 : 1);
-    if (rng.chance(pp / (pp + 260))) {
+    if (rng.chance(pp / (pp + 300))) {
       t.hp -= rng.float(12, 24) * Math.max(0.5, Math.min(1.6, pp / 150));
       for (const h of heroes) h.fame += 6;
       if (t.hp <= 0) {
@@ -1042,24 +1173,26 @@ function leviathanMonth(w: World): void {
       for (const h of heroes) if (rng.chance(0.12)) killChar(w, h, `${V.name}의 촉수에 휘감겨 전사`);
     }
   }
-  // 베어 낸 촉수가 다시 자라기도 한다
   // 스무 해가 넘으면 심연의 군주도 지쳐 간다
   if (w.t - V.t > 12 * 20) for (const t of V.tentacles) if (t.alive) t.hp -= 1.2;
   for (const t of V.tentacles) if (t.alive && t.hp <= 0) t.alive = false;
+  // 베어 낸 촉수가 다시 자라기도 한다
   for (const t of V.tentacles) if (!t.alive && rng.chance(0.003)) {
     t.alive = true; t.hp = 120;
     addNews(w, `베어 낸 줄 알았던 ${V.name}의 촉수가 다시 자라났다.`, 3, 'doom', { pos: { l: L, x: t.x, y: t.y } });
   }
-  // 절반 이상을 베면 심연으로 돌아간다
+  // 절반 이상을 베면 심연으로 돌아간다 (권속들도 함께 가라앉는다)
   const cut = V.tentacles.filter(t => !t.alive).length;
   if (cut * 2 > V.tentacles.length) {
     V.active = false;
     V.ended = w.t;
+    let sunk = 0;
+    for (const b of w.sea.beasts) if (b.alive && b.abyss) { b.alive = false; sunk++; }
     const lead = w.factions[V.leader];
     if (lead) { lead.legitimacy = Math.min(100, lead.legitimacy + 20); const ld = leaderOf(w, lead); if (ld) { ld.fame += 60; ld.honor += 20; } }
     for (const a of V.alliance) for (const b of V.alliance) { const fa = w.factions[a], fb = w.factions[b]; if (a !== b && fa && fb) addFacRel(w, fa, fb, 10); }
     w.stats.leviathanRepelled = (w.stats.leviathanRepelled ?? 0) + 1;
-    addNews(w, `촉수의 절반을 잃은 ${V.name}이(가) 길게 울부짖으며 심연으로 가라앉았다. ${lead ? `${lead.name}이(가) 이끈 ` : ''}연맹이 세계를 지켜 냈다. 바다는 다시 잔잔해졌지만, 그것은 죽지 않았다. 다만 잠들었을 뿐이다.`, 5, 'hero', { facs: V.alliance });
+    addNews(w, `촉수의 절반을 잃은 ${V.name}이(가) 길게 울부짖으며 심연으로 가라앉았다.${sunk ? ' 해안을 떠돌던 권속들도 함께 바다 밑으로 사라졌다.' : ''} ${lead ? `${lead.name}이(가) 이끈 ` : ''}연맹이 세계를 지켜 냈다. 바다는 다시 잔잔해졌지만, 그것은 죽지 않았다. 다만 잠들었을 뿐이다.`, 5, 'hero', { facs: V.alliance });
   }
 }
 
@@ -1106,7 +1239,7 @@ export function seaMonth(w: World): void {
     }
   }
   // 바다 괴수 (수십 년에 하나)
-  if (S.beasts.filter(b => b.alive).length < 2 && rng.chance(1 / (12 * 35))) spawnBeast(w);
+  if (S.beasts.filter(b => b.alive && !b.abyss).length < 2 && rng.chance(1 / (12 * 35))) spawnBeast(w);
   // 심연의 군주(심해의 분노): 300여 년에 한 번 볼까 말까
   if (!S.leviathan?.active && w.t - S.lastLeviathan > 12 * 150 && rng.chance(1 / (12 * 380))) {
     if (awakenLeviathan(w)) w.stats.leviathan = (w.stats.leviathan ?? 0) + 1;

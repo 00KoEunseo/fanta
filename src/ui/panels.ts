@@ -8,7 +8,7 @@ import type { Character, Faction, NewsItem, Settlement, World } from '../sim/sta
 import { LAYER_INFO, SEASON_NAMES, ageOf, dateStr, seasonOf } from '../sim/state';
 import { charLabel, isHero, leaderOf, settlementsOf, titleOf } from '../sim/helpers';
 import { SEAL_NAMES, brokenCount, omen, sealTotal, sealVisible } from '../sim/doom';
-import { seaThingsAt } from '../sim/sea';
+import { TENTACLE_HP, seaThingsAt } from '../sim/sea';
 import { eraName } from '../sim/news';
 import { currentStories, storyIcon, storyYears } from '../sim/stories';
 import { knows } from '../sim/contact';
@@ -303,7 +303,7 @@ export function inspectTile(w: World, l: number, x: number, y: number): string {
         + S.voyages.map(v => `<div class="sec">⛵ ${esc(v.name)}</div><div>선장 ${charLink(w, w.chars[v.captain])} · 선원 ${v.crew.length}명 · ${{ treasure: '보물 탐사', explore: '미지의 바다 탐험', hunt: '괴수 사냥' }[v.goal]} · 출항 ${dateStr(w, v.t)} (예정 ${Math.round(v.months / 12)}년)<br><small>${v.crew.map(id => charLink(w, w.chars[id])).join(', ')}</small></div>`).join('')
         + S.fleets.map(f => `<div class="sec">⛵ ${esc(f.name)}</div><div>${esc(RACES[f.race].name)} ${Math.round(f.pop)}명 · ${f.pirate ? '해적질로 연명한다' : '바다에서 고기를 잡으며 떠돈다'} · ${Math.floor((w.t - f.t) / 12)}년째${w.chars[f.leader] && w.chars[f.leader].died < 0 ? ` · 이끄는 이 ${charLink(w, w.chars[f.leader])}` : ''}<br><small>바다는 자원이 모자라 큰 무리가 될 수 없다.</small></div>`).join('')
         + S.beasts.map(b => `<div class="sec">🐙 ${esc(b.name)}</div><div>체력 ${Math.max(0, Math.round(b.hp))}/${b.maxHp} · 힘 ${b.power} · ${b.ashore ? `<b style="color:var(--red)">${esc(w.settlements[b.target]?.name ?? '')}의 해안을 덮치고 있다</b>` : `${esc(w.settlements[b.target]?.name ?? '')} 쪽으로 다가온다`}${b.allies.length > 1 ? `<br>연맹: ${b.allies.map(id => facLink(w.factions[id])).join(', ')}` : ''}</div>`).join('')
-        + (S.tentacles.length ? `<div class="sec">♆ ${esc(w.sea.leviathan!.name)}의 촉수</div><div>${S.tentacles.map(t => `체력 ${Math.max(0, Math.round(t.hp))}/250`).join(' · ')}${w.sea.leviathan!.cause ? `<br><i>${esc(w.sea.leviathan!.cause)}</i>` : ''}<br><small>주변 10칸을 괴롭힌다. 연맹: ${w.sea.leviathan!.alliance.map(id => facLink(w.factions[id])).join(', ') || '없음'}</small></div>` : '');
+        + (S.tentacles.length ? `<div class="sec">♆ ${esc(w.sea.leviathan!.name)}의 촉수</div><div>${S.tentacles.map(t => `체력 ${Math.max(0, Math.round(t.hp))}/${TENTACLE_HP}`).join(' · ')}${w.sea.leviathan!.cause ? `<br><i>${esc(w.sea.leviathan!.cause)}</i>` : ''}<br><small>해안을 따라 움직이며 가까운 고을을 내리치고, 권속을 토해 낸다. 연맹: ${w.sea.leviathan!.alliance.map(id => facLink(w.factions[id])).join(', ') || '없음'}</small></div>` : '');
     })()}
     ${chars.length ? `<div class="sec">근처의 인물</div>${chars.slice(0, 20).map(c => charLink(w, c)).join('<br>')}` : ''}
   `;
@@ -385,8 +385,23 @@ export function sealsTab(w: World): string {
 }
 
 export function statsTab(w: World): string {
+  // 땅을 갖지 않는 종족(악마)은 인구 막대에서 빼고, 아래 '세계' 칸에 따로 센다
   const byRace = POP_RACES.map(r => ({ r, pop: w.settlements.filter(s => s.alive && s.race === r).reduce((a, s) => a + s.pop, 0) }))
+    .filter(x => x.pop > 0 || w.factions.some(f => f.alive && f.race === x.r))
     .sort((a, b) => b.pop - a.pop);
+  // 지금 벌어지는 전쟁: 누가 누구와, 몇 해째, 어느 쪽이 밀리는가
+  const wars: string[] = [];
+  for (const f of w.factions) {
+    if (!f.alive) continue;
+    for (const k of Object.keys(f.wars)) {
+      const e = w.factions[+k];
+      if (!e || !e.alive || e.id < f.id) continue;
+      const yrs = Math.floor((w.t - f.wars[+k]) / 12);
+      const sc = f.warState?.[e.id]?.score ?? 0;
+      const lead = Math.abs(sc) < 15 ? '팽팽함' : `${esc(sc > 0 ? f.name : e.name)} 우세`;
+      wars.push(`<div>${facLink(f)} ⚔ ${facLink(e)} <span class="dim">${yrs ? `${yrs}년째` : '올해'} · ${lead}</span></div>`);
+    }
+  }
   const max = Math.max(1, ...byRace.map(x => x.pop));
   const total = byRace.reduce((a, x) => a + x.pop, 0);
   const alive = w.chars.filter(c => c.died < 0);
@@ -404,7 +419,9 @@ export function statsTab(w: World): string {
       <span>마왕</span><span>${w.demonLord >= 0 ? charLink(w, w.chars[w.demonLord]) : '없음'}</span>
       <span>진군 중 군대</span><span>${w.armies.filter(a => a.alive).length}</span>
       <span>전장의 망자</span><span>${fmtNum(w.corpses)}</span>
-    </div></div></div>`;
+      <span>악마</span><span>${alive.filter(c => c.archdemon).length} <span class="dim">(어느 나라에도 속하지 않는다)</span></span>
+    </div></div></div>
+    <div class="sec">지금의 전쟁 (${wars.length})</div>${wars.join('') || '<div class="dim">세상은 잠시 평화롭다.</div>'}`;
 }
 
 export function myLifeTab(w: World, all = false): string {

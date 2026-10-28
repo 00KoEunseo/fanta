@@ -359,7 +359,8 @@ export function killChar(w: World, c: Character, cause: string, killer?: Charact
   // 유산
   const heirs = c.children.map(id => w.chars[id]).filter(k => k && k.died < 0);
   if (heirs.length) for (const h of heirs) h.wealth += c.wealth / heirs.length;
-  if (c.race === 'dragon' && killer && !c.ancient) {
+  // 고을을 불태우던 습격룡을 벤 것은 원한이 되지 않는다 (공물을 받던 수호룡이나 숨어 살던 용을 죽였을 때만)
+  if (c.race === 'dragon' && killer && !c.ancient && c.dragonKind !== 'raider') {
     w.doom.dragonGrievance++;
     if (c.patronOf !== undefined) {
       const pf = w.factions[c.patronOf];
@@ -547,6 +548,8 @@ export function characterMonth(w: World, c: Character): void {
     return;
   }
   if (c.act.kind === 'party' || c.act.kind === 'voyage' || c.act.kind === 'fleet') return;
+  // 옥에 갇힌 몸 ('나'만: 풀려나는 일은 탄생 모드가 챙긴다)
+  if (c.act.kind === 'prison') { if (!c.isPlayer) c.act = { kind: 'idle' }; return; }
   // 상단을 이끄는 중: 상단이 함께 움직인다. 상단이 사라졌으면 일상으로
   // 주둔지를 지키는 중
   if (c.act.kind === 'camp') {
@@ -679,7 +682,7 @@ function doAction(w: World, c: Character, act: ActionKey): void {
       const dests = w.settlements.filter(s => s.alive && s.id !== c.home && s.l === c.l && dist(s, c) < 24 * reachFactor(w)
         && (s.faction === c.faction || (f && knows(w, f, s.faction) && (f.relations[s.faction] ?? 0) > -10 && f.wars[s.faction] === undefined)));
       const dest = dests.length ? rng.pick(dests) : undefined;
-      if (dest && setTravel(w, c, dest, 'trade')) charLog(w, c, `교역품을 싣고 ${dest.name}(으)로 길을 나섰다.`);
+      if (dest && setTravel(w, c, dest, 'trade')) charLog(w, c, `교역품을 싣고 ${dest.name}(으)로 길을 나섰다.`, c.isPlayer ? 2 : 1);
       else { c.wealth += rng.float(2, 6); charLog(w, c, marketLine(w, c)); }
       break;
     }
@@ -1067,6 +1070,21 @@ function dragonMonth(w: World, c: Character): void {
     if (tgt && setTravel(w, c, tgt, 'hunt', tgt.id)) {
       charLog(w, c, `${tgt.name}을(를) 향해 날아올랐다.`, 2);
       return;
+    }
+  }
+  // 하늘에 사는 용은 하늘섬에 들어선 땅의 족속을 참지 못한다: 잠에서 깨어 거듭 덮친다
+  const skyHome = (c.lair ?? c).l === 1;
+  if (skyHome && !c.ancient && c.dragonKind !== 'patron') {
+    const intruders = w.settlements.filter(s => s.alive && s.l === 1 && !RACES[s.race].layers.includes(1) && s.faction !== c.patronOf && approxDist(w, c, s, true) < 45
+      && (s.lastBurned === undefined || w.t - s.lastBurned >= 18));
+    if (intruders.length && rng.chance((c.sleep ?? 0) > 0 ? 0.01 : 0.035)) {
+      const s = rng.pick(intruders);
+      c.sleep = 0;
+      if (setTravel(w, c, s, 'hunt', s.id)) {
+        charLog(w, c, `하늘섬을 더럽힌 ${s.name}을(를) 향해 날아올랐다.`, 2);
+        if (rng.chance(0.5)) addNews(w, `하늘의 용 ${c.name}이(가) 하늘섬의 침입자들이 세운 ${s.name}을(를) 향해 날개를 폈다.`, 3, 'dark', { pos: s, chars: [c.id], facs: [s.faction] });
+        return;
+      }
     }
   }
   if ((c.sleep ?? 0) > 0) {

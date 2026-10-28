@@ -1,5 +1,6 @@
 import { RACES, type RaceKey } from '../data/races';
 import { WORLD_LIFE } from './lifeData11';
+import { AFTERMATH, CHILD2, PRISON, TRAVEL2, playerCoupFailed } from './lifeData12';
 import { knows, knowsRealm } from './contact';
 import { makeName } from '../data/names';
 import { ADVENTURER_TIRED, JOB_SEARCH, buildPrompt, makeCtx, nearDeath, resolveLife, type LifeEv } from './life';
@@ -253,11 +254,15 @@ LIFE.push({
 
 
 LIFE.push({
-  id: 'coup', cooldown: 48, chance: 0.03,
+  id: 'coup', cooldown: 120, chance: 0.012,
   cond: (w, c) => {
     const f = w.factions[c.faction];
     const ld = f ? leaderOf(w, f) : null;
-    return !!ld && ld.id !== c.id && c.rank >= 1 && (f.legitimacy < 55 || rel(c, ld.id) < -20 || c.traits[AMBITION] > 70);
+    if (!ld || ld.id === c.id || c.act.kind !== 'idle') return false;
+    // 귀족·영주·이름난 장수만 귀족들의 부름을 받는다. 나라가 흔들리거나 군주와 크게 틀어졌을 때
+    const high = c.rank >= 2 || w.settlements.some(s => s.alive && s.governor === c.id) || c.fame >= 80;
+    const unrest = f.legitimacy < 40 || rel(c, ld.id) < -40 || (c.traits[AMBITION] > 75 && f.legitimacy < 55);
+    return high && unrest;
   },
   build: (w, c) => {
     const f = w.factions[c.faction];
@@ -276,9 +281,14 @@ LIFE.push({
     const f = w.factions[c.faction];
     const ld = leaderOf(w, f);
     if (ch === 'rebel') {
-      attemptCoup(w, c);
+      const r = attemptCoup(w, c);
+      if (r === 'caught') {
+        const t = playerCoupFailed(makeCtx(w, c));
+        if (t === 'execute') { killChar(w, c, '반역죄로 처형', ld ?? undefined); return '반역은 실패하였다. 처형대가 기다리고 있었다.'; }
+        return t;
+      }
       if (c.died >= 0) return '반역은 실패하였다…';
-      return f.leader === c.id ? '왕좌를 손에 넣었다!' : '반역은 실패하였으나 목숨은 건졌다.';
+      return f.leader === c.id ? '왕좌를 손에 넣었다!' : '반역은 실패하였다.';
     }
     if (ch === 'wait') { c.plot += 40; return '은밀히 세력을 모으기 시작하였다.'; }
     if (ld) addRel(w, c, ld, 30);
@@ -575,6 +585,17 @@ export function playerTick(w: World): void {
   // 자주 겪은 일일수록 다시 찾아오기까지 오래 걸린다 (같은 장면이 한 생애에 수십 번 되풀이되지 않도록)
   const cdFor = (id: string, base: number) => base * (1 + 0.5 * Math.min(6, P.seen?.[id] ?? 0));
   const isDragon = c.race === 'dragon';
+  // 옥에 갇힌 몸: 옥 안의 일만 일어난다 (풀려나는 날과 사면은 바로 묻는다)
+  if (c.act.kind === 'prison') {
+    const x = makeCtx(w, c);
+    for (const ev of PRISON.filter(e => e.id === 'pr_release' || e.id === 'pr_pardon')) if (ev.c(x)) { const prompt = buildPrompt(x, ev); if (prompt) { setPrompt(prompt, ev.id); return; } }
+    if (!rng.chance(0.07)) return;
+    const eligible = PRISON.filter(ev => ev.id !== 'pr_release' && ev.id !== 'pr_pardon' && !(ev.once && P.lastEvents[ev.id] !== undefined) && (P.lastEvents[ev.id] === undefined || w.t - P.lastEvents[ev.id] >= cdFor(ev.id, ev.cd ?? 12)) && ev.c(x));
+    const ev = eligible.length ? rng.pick(eligible) : null;
+    const prompt = ev && buildPrompt(x, ev);
+    if (prompt && ev) setPrompt(prompt, ev.id);
+    return;
+  }
   // 무리에서 부르는 소리 (토벌대, 출정, 유적 입구): 오면 바로 묻는다
   {
     const x = makeCtx(w, c);
@@ -622,7 +643,7 @@ export function playerTick(w: World): void {
         && (a.faction === dlf || w.factions[a.faction]?.flags.includes('dlvassal')) && a.l === home.l && dist(a, home) < 25)) markPeril(w, 'dlarmy', home);
     }
     // 세상의 재앙에 휘말렸다
-    for (const ev of [...PERIL, ...DL_PERIL]) {
+    for (const ev of [...AFTERMATH, ...PERIL, ...DL_PERIL]) {
       const last = P.lastEvents[ev.id];
       if (!fitsLife(w, c, ev.id)) continue;
       // 같은 재난을 거듭 겪으면 다시 묻기까지 오래 걸린다 (해안 재난이 한 생애에 수십 번 되풀이되지 않도록)
@@ -650,7 +671,7 @@ export function playerTick(w: World): void {
       }
     }
     // 무리와 함께 움직이는 동안에는 그 무리의 일만 일어난다
-    const group = c.act.kind === 'party' ? PARTY_EV : c.act.kind === 'army' ? ARMY_EV : c.act.kind === 'travel' ? TRAVEL_EV : null;
+    const group = c.act.kind === 'party' ? PARTY_EV : c.act.kind === 'army' ? ARMY_EV : c.act.kind === 'travel' ? TRAVEL_ALL : null;
     if (group) {
       // 부모 손에 이끌려 길을 가는 아이에게 길 위의 사건은 일어나지 않는다
       if (!isAdult(w, c)) return;
@@ -699,7 +720,7 @@ export function playerTick(w: World): void {
   }
   // 3) 인생의 여러 순간들
   const special = x.c.race === 'dragon' || x.c.awakened.includes('guardian');
-  const rate = x.stage < 1 ? 0.022 : special ? 0.05 : 0.03;
+  const rate = x.stage < 1 ? 0.034 : special ? 0.05 : 0.036;
   if (!rng.chance(rate)) return;
   const base = isDragon ? DRAGON : isGuardian ? POOL_GUARDIAN : c.role === '노예' ? POOL_SLAVE : c.race === 'undead' ? POOL_HUMAN.filter(e => !UNDEAD_SKIP.has(e.id)) : POOL_HUMAN;
   const eligible = base.filter(ev => {
@@ -717,7 +738,8 @@ export function playerTick(w: World): void {
   }
 }
 
-const POOL: LifeEv[] = [...CHILD, ...ROMANCE, ...TRAIT, ...RACIAL, ...JOBS, ...POWER, ...GUARDIAN, ...DRAGON,
+const TRAVEL_ALL: LifeEv[] = [...TRAVEL_EV, ...TRAVEL2];
+const POOL: LifeEv[] = [...CHILD, ...CHILD2, ...ROMANCE, ...TRAIT, ...RACIAL, ...JOBS, ...POWER, ...GUARDIAN, ...DRAGON,
   ...WORKS_EV, ...RENOWN, ...ARTFATE, ...GOVPATH, ...NEWJOBS, ...GUARDIAN2, ...ECON, ...SLAVE, ...TOWER, ...SEA_START, ...ALLIANCE_EV, ...STORY.filter(e => !STORY_FOLLOW.has(e.id)), ...CAREER, ...HOUSE, JOB_OFFER[1], ...ROYAL, ...RULE, ...ARCS, ...WORLD_LIFE.filter(e => e.id !== 'wl_contact' && e.id !== 'wl_camp_night')];
 const POOL_HUMAN: LifeEv[] = POOL.filter(e => !DRAGON.includes(e));
 /** 돈벌이·출세와 무관한 성역의 수호자에게 어울리는 것들 */
@@ -748,7 +770,7 @@ function fitsLife(w: World, c: Character, id: string): boolean {
   if (RACES[c.race].needs[0] === 0 && UNDEAD_SKIP.has(id)) return false;
   return true;
 }
-const POOL_MAP = new Map<string, LifeEv>([...POOL, ...SEA, ...STORY, ...PERIL, ...MILESTONES, ...JOB_OFFER, ...INVITES, ...PARTY_EV, ...ARMY_EV, ...TRAVEL_EV, ...CARE, ...DL_PERIL, ...WORLD_LIFE, JOB_SEARCH, ADVENTURER_TIRED].map(e => [e.id, e]));
+const POOL_MAP = new Map<string, LifeEv>([...POOL, ...SEA, ...STORY, ...PERIL, ...MILESTONES, ...JOB_OFFER, ...INVITES, ...PARTY_EV, ...ARMY_EV, ...TRAVEL_EV, ...TRAVEL2, ...PRISON, ...AFTERMATH, ...CARE, ...DL_PERIL, ...WORLD_LIFE, JOB_SEARCH, ADVENTURER_TIRED].map(e => [e.id, e]));
 export const LIFE_EVENT_COUNT = () => POOL.length + LIFE.length + 2;
 
 export function resolvePlayer(w: World, choiceId: string): string {

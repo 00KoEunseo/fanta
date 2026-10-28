@@ -151,9 +151,9 @@ race({
 race({
   key: 'majin', name: '마족', glyph: 'M', color: '#b84ee0', layers: [L_DEMON],
   prefer: { [Tr.BLOODMIRE]: 3, [Tr.ASH]: 2, [Tr.BRIMSTONE]: 2 },
-  moveOverride: {}, lifespan: [480, 90], adult: 30, growth: 0.0016,
+  moveOverride: {}, lifespan: [480, 90], adult: 30, growth: 0.003,
   needs: [0.9, 0.05, 0.05, 0.05, 0.1, 0.02], prodMul: [1, 0.8, 1, 1.2, 1.4, 1], flying: false,
-  aggression: 0.8, trade: 0.3, might: 1.5, magic: 1.4, align: 'dark', startFactions: 2, startPop: [100, 170],
+  aggression: 0.8, trade: 0.3, might: 1.5, magic: 1.4, align: 'dark', startFactions: 3, startPop: [140, 220],
   aptBias: [5, -20, 25, 5, 0, 10], traitBias: { 1: 15, 3: -10, 9: 10 },
   settlementTiers: ['마굴', '마족 촌', '마도시', '마성', '마왕성'],
   titles: ['수장', '마공', '마족왕', '마제'],

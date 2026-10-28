@@ -18,12 +18,12 @@ import { addNews, charLog } from './news';
 import type { Character, Faction, Settlement, World } from './state';
 import { ageOf, dist } from './state';
 import {
-  addFacRel, addRel, aliveFactions, approxDist, atWar, charLabel, clamp, facRel, factionDistance, isAdult, leaderOf,
+  addFacRel, addRel, aliveFactions, approxDist, atWar, charLabel, charPower, clamp, facRel, factionDistance, isAdult, leaderOf,
   rel, settlementsOf,
 } from './helpers';
 import { awaken, createCharacter, killChar, relocate, setPos } from './characters';
-import { findColonySite, capacity, hasFlag } from './settlements';
-import { raiseArmy } from './military';
+import { findColonySite, capacity, hasFlag, setTimedFlag } from './settlements';
+import { garrison, raiseArmy } from './military';
 import { borderNeighbors, updatePosture } from './territory';
 import { crownHouse, ensureHouse } from './houses';
 import { knowsDL } from './crusade';
@@ -117,7 +117,7 @@ export function crown(w: World, f: Faction, c: Character, how: string): void {
 export function succession(w: World, f: Faction): void {
   const rng = w.rngSim;
   const old = w.chars[f.leader];
-  const members = w.chars.filter(c => c.died < 0 && c.faction === f.id && c.race !== 'dragon' && c.role !== '노예');
+  const members = w.chars.filter(c => c.died < 0 && c.faction === f.id && c.race !== 'dragon' && c.role !== '노예' && (c.race === 'angel') === (f.race === 'angel'));
   if (!members.length) {
     // 아무도 없으면 백성 중에서 지도자가 나온다
     const cap = w.settlements[f.capital];
@@ -211,13 +211,13 @@ export function transferSettlement(w: World, s: Settlement, to: Faction): void {
 
 // ───────────── 반역 / 독립
 
-export function attemptCoup(w: World, c: Character): void {
+export function attemptCoup(w: World, c: Character): 'won' | 'caught' | 'other' {
   const rng = w.rngSim;
   const f = w.factions[c.faction];
   c.plot = 0;
-  if (!f || !f.alive) return;
+  if (!f || !f.alive) return 'other';
   const ld = leaderOf(w, f);
-  if (!ld || ld.id === c.id) return;
+  if (!ld || ld.id === c.id) return 'other';
   const members = w.chars.filter(m => m.died < 0 && m.faction === f.id && m.id !== c.id && m.id !== ld.id);
   const sup = members.filter(m => rel(m, c.id) > 25 && rel(m, c.id) > rel(m, ld.id)).length;
   const loy = members.filter(m => rel(m, ld.id) > 25).length;
@@ -239,13 +239,16 @@ export function attemptCoup(w: World, c: Character): void {
     f.legitimacy = 25;
     addNews(w, `${c.name}이(가) 반란을 일으켜 ${title} ${ld.name}을(를) ${killed ? '시해하고' : '몰아내고'} ${f.name}의 왕좌를 차지하였다.`, 4, 'politics', { facs: [f.id], chars: [c.id, ld.id] });
     charLog(w, c, `반란에 성공하여 ${f.name}의 ${RACES[f.race].titles[f.tier]}이(가) 되었다.`, 5);
+    return 'won';
   } else {
+    // '나'의 반역이 실패하면 그 뒤(처형·옥살이·추방)는 탄생 모드가 정한다
+    if (c.isPlayer) return 'caught';
     addRel(w, ld, c, -80);
     const gov = w.settlements.find(s => s.alive && s.governor === c.id);
     if (gov && rng.chance(0.4) && f.settlements.length >= 2) {
       addNews(w, `${c.name}의 반역 음모가 발각되자, 그는 ${gov.name}에서 독립을 선언하였다.`, 3, 'politics', { facs: [f.id], chars: [c.id] });
       secede(w, c, gov);
-    } else if (rng.chance(0.7)) {
+    } else if (rng.chance(0.45)) {
       addNews(w, `${f.name}에서 ${c.name}의 반역 음모가 발각되었다. ${title} ${ld.name}은(는) 그를 처형하였다.`, 3, 'politics', { facs: [f.id], chars: [c.id, ld.id] });
       killChar(w, c, '반역죄로 처형', ld);
     } else {
@@ -254,6 +257,7 @@ export function attemptCoup(w: World, c: Character): void {
       charLog(w, c, '반역이 들통나 고향을 등지고 도망쳤다.', 4);
     }
   }
+  return 'other';
 }
 
 /** 너무 넓어진 나라: 수도에서 먼 고을(다른 겨레이거나 민심이 흉흉한 곳)이 영주를 앞세워 떨어져 나간다 (해마다) */
@@ -275,11 +279,23 @@ export function secede(w: World, c: Character, s: Settlement): Faction {
   const f = w.factions[s.faction];
   const nf = createFaction(w, s.race, s.name, 1);
   inheritKnown(w, nf, f);
+  // 들고 일어서는 고을 곁의 고을 몇(0~2)이 함께 깃발을 든다: 민심이 흉흉하거나, 같은 겨레이거나, 영주가 반란자와 가깝다
+  const joiners = f ? settlementsOf(w, f).filter(o => o.id !== s.id && o.id !== f.capital && o.l === s.l && dist(o, s) <= 16)
+    .map(o => { const g = w.chars[o.governor]; return { o, p: (o.stability < 45 ? 0.45 : 0.2) + (o.race === s.race ? 0.1 : 0) + (g && g.died < 0 && rel(g, c.id) > rel(g, f.leader) ? 0.3 : 0) - dist(o, s) / 80 }; })
+    .filter(x => w.rngSim.chance(x.p)).sort((a, b) => b.p - a.p).slice(0, 2).map(x => x.o) : [];
   transferSettlement(w, s, nf);
+  for (const o of joiners) { transferSettlement(w, o, nf); o.stability = clamp(o.stability + 15); }
   nf.capital = s.id;
   c.faction = nf.id; c.home = s.id;
+  // 함께 일어선 고을의 사람들도 새 깃발 아래 선다
+  for (const m of w.chars) if (m.died < 0 && m.faction === f?.id && joiners.some(o => o.id === m.home) && f.leader !== m.id) m.faction = nf.id;
   crown(w, nf, c, '독립');
-  nf.legitimacy = 45;
+  nf.legitimacy = 55;
+  s.stability = clamp(s.stability + 20);
+  // 갓 일어선 나라는 결기로 버틴다 (다섯 해 동안 성벽을 더 굳게 지킨다)
+  setTimedFlag(nf, 'uprising', w.t + 60);
+  if (f) f.legitimacy = clamp(f.legitimacy - 6 - joiners.length * 4);
+  if (joiners.length) addNews(w, `${joiners.map(o => o.name).join(', ')}이(가) ${s.name}과(와) 함께 ${f!.name}에 등을 돌렸다.`, 3, 'politics', { facs: [nf.id, f!.id], pos: s });
   if (f) {
     nf.relations[f.id] = -50; f.relations[nf.id] = -50;
     const ld = leaderOf(w, f);
@@ -471,13 +487,34 @@ const TRADE_REACH = 80;
 const dlOf = (w: World) => (w.demonLord >= 0 ? w.chars[w.demonLord] : null);
 
 /** 국경을 맞댄 이웃 (해마다 다시 잰다: 땅을 훑는 일이라 매달 하기엔 무겁다) */
-const nbCache = new WeakMap<World, Map<number, { t: number; ids: Set<number> }>>();
-export function isNeighbor(w: World, a: Faction, b: Faction): boolean {
+const nbCache = new WeakMap<World, Map<number, { t: number; ids: Set<number>; border: Set<number> }>>();
+function nbOf(w: World, a: Faction) {
   let m = nbCache.get(w);
   if (!m) { m = new Map(); nbCache.set(w, m); }
   let c = m.get(a.id);
-  if (!c || w.t - c.t >= 12 || w.t < c.t) { c = { t: w.t, ids: new Set(borderNeighbors(w, a).map(o => o.id)) }; m.set(a.id, c); }
-  return c.ids.has(b.id);
+  if (!c || w.t - c.t >= 12 || w.t < c.t) { const border = new Set(borderNeighbors(w, a).map(o => o.id)); c = { t: w.t, border, ids: neighborIds(w, a, border) }; m.set(a.id, c); }
+  return c;
+}
+export function isNeighbor(w: World, a: Faction, b: Faction): boolean { return nbOf(w, a).ids.has(b.id); }
+/** 국경이 맞닿은 이웃 */
+export function isBorder(w: World, a: Faction, b: Faction): boolean { return nbOf(w, a).border.has(b.id); }
+
+/** 이웃: 국경이 맞닿았거나, 고을끼리 가까이(18칸) 마주 보거나, 층을 잇는 통로의 양 끝에 서로의 고을이 있다 (위아래 이웃) */
+function neighborIds(w: World, a: Faction, border: Set<number>): Set<number> {
+  const ids = new Set(border);
+  const mine = settlementsOf(w, a);
+  for (const s of w.settlements) {
+    if (!s.alive || s.faction === a.id || s.faction < 0 || ids.has(s.faction)) continue;
+    if (mine.some(m => m.l === s.l && dist(m, s) <= 18)) ids.add(s.faction);
+  }
+  for (const p of w.portals) {
+    if (!p.open || p.a.l === p.b.l) continue;
+    for (const [here, there] of [[p.a, p.b], [p.b, p.a]]) {
+      if (!mine.some(m => m.l === here.l && dist(m, here) <= 12)) continue;
+      for (const s of w.settlements) if (s.alive && s.faction !== a.id && s.faction >= 0 && s.l === there.l && dist(s, there) <= 12) ids.add(s.faction);
+    }
+  }
+  return ids;
 }
 
 export function pWarMonth(w: World, a: Faction, b: Faction): number {
@@ -504,9 +541,10 @@ export function pWarMonth(w: World, a: Faction, b: Faction): number {
   const powerF = ratio < 0.8 ? ratio * 0.25 : Math.min(2.5, ratio);
   const d = facDist(w, a, b);
   if (!isFinite(d)) return 0;
-  // 전쟁은 대개 이웃끼리: 국경을 맞댄 나라는 더 자주, 멀리 있는 나라는 훨씬 드물게
-  const neighbor = isNeighbor(w, a, b);
-  const distF = (neighbor ? 1.5 : 1) * (d < 25 ? 1 : Math.exp(-(d - 25) / 12));
+  // 전쟁은 대개 이웃끼리(국경을 맞댔거나 층을 잇는 통로로 이어진 나라). 이웃이 아닌 나라와는 아주 드물게
+  const border = isBorder(w, a, b) || isBorder(w, b, a);
+  const neighbor = border || isNeighbor(w, a, b) || isNeighbor(w, b, a);
+  const distF = border ? 0.6 : neighbor ? 0.35 : 0.04 * Math.exp(-Math.max(0, d - 20) / 10);
   const warsF = 1 / (1 + Object.keys(a.wars).length * 1.5);
   const pile = special === 1 ? Math.pow(0.7, Object.keys(b.wars).length) : 1;
   const hunger = a.flags.includes('food_crisis') ? 1.6 : 1;
@@ -612,7 +650,9 @@ export function factionMonth(w: World, f: Faction): void {
     const swornBy = (m: Faction, foe: Faction) => w.alliances.some(al => al.alive && al.members.includes(m.id) && w.chars[al.enemy]?.died < 0 && w.chars[al.enemy]?.faction === foe.id);
     const sworn = swornBy(f, e) || swornBy(e, f);
     const dlWar = w.demonLord >= 0 && (w.chars[w.demonLord]?.faction === f.id || w.chars[w.demonLord]?.faction === e.id);
-    if (treeHeld || sworn) continue;
+    // 천사는 성역을 되찾기 전에는 칼을 거두지 않는다
+    const sanctumHeld = f.race === 'angel' && w.settlements.some(s => s.alive && s.flags.includes('sanctum') && s.faction === e.id);
+    if (treeHeld || sworn || sanctumHeld) continue;
     if (dlWar) { if (rng.chance(pPeace)) makePeace(w, f, e); continue; }
     // 반년에 한 번, 밀리는 쪽이 조건을 내걸고 강화를 청한다
     if (f.id < e.id && w.t % 6 === (f.id + e.id) % 6) negotiate(w, f, e, makePeace);
@@ -793,7 +833,8 @@ function tryColonize(w: World, f: Faction): void {
   const ss = settlementsOf(w, f);
   if (ss.length >= 3 + f.tier * 4) return;
   if (w.armies.some(a => a.alive && a.faction === f.id && a.goal === 'colonize')) return;
-  const crowded = ss.filter(s => s.pop > 220 && s.pop > capacity(w, s) * 0.6);
+  // 마족은 땅이 넓어도 수가 더디 불어나니, 고을이 웬만큼 차면 새 마굴을 판다
+  const crowded = ss.filter(s => s.pop > 220 && (s.pop > capacity(w, s) * 0.6 || (s.race === 'majin' && s.pop > 350)));
   if (!crowded.length) return;
   const from = rng.pick(crowded);
   if (!R.layers.includes(from.l) && !rng.chance(0.3)) return;
@@ -828,6 +869,13 @@ export function fallFaction(w: World, f: Faction): void {
 /** 떠돌이 인물은 다른 세력에 의탁한다 */
 export function homelessMonth(w: World, c: Character): void {
   const rng = w.rngSim;
+  // 천사는 천사의 나라 밖에 속하지 않는다 (어쩌다 남의 나라에 묶였으면 풀려나 제 나라로 돌아간다)
+  if (c.race === 'angel' && c.faction >= 0 && w.factions[c.faction]?.race !== 'angel') {
+    const of = w.factions[c.faction];
+    if (of && of.leader === c.id) of.leader = -1;
+    for (const s of w.settlements) if (s.governor === c.id) s.governor = -1;
+    c.faction = -1; c.home = -1;
+  }
   if (c.home >= 0 && w.settlements[c.home]?.alive && c.faction >= 0) return;
   // 열강은 어느 나라에도 깃들지 않는다
   if (c.race === 'dragon' || c.act.kind !== 'idle' || c.paragon || c.archdemon) return;
@@ -861,3 +909,45 @@ export function homelessMonth(w: World, c: Character): void {
 // 강화 조건으로 고을을 넘길 때 쓴다
 setTransfer((w, s, f) => transferSettlement(w, s, f));
 setPeace((w, a, b) => makePeace(w, a, b));
+
+/** 나라를 잃은 천사들: 살아남은 자리의 천사들이 모여 빼앗긴 성역을 되찾으러 내려간다 (두 해에 한 번꼴). 되찾으면 천사의 나라가 다시 선다 */
+export function angelReclaim(w: World): void {
+  const rng = w.rngSim;
+  const sanctum = w.settlements.find(s => s.alive && s.flags.includes('sanctum'));
+  if (!sanctum) return;
+  const af = w.factions.find(f => f.alive && f.race === 'angel');
+  if (af) {
+    // 나라는 남았으나 성역을 빼앗겼다: 되찾을 때까지 싸운다
+    const h = w.factions[sanctum.faction];
+    if (h && h.alive && h !== af && !atWar(af, h.id)) {
+      declareWar(w, af, h, true);
+      addNews(w, `${af.name}의 천사들이 빼앗긴 ${sanctum.name}을(를) 되찾기 위해 ${h.name}에 칼을 겨누었다.`, 4, 'hero', { pos: sanctum, facs: [af.id, h.id] });
+    }
+    return;
+  }
+  const host = w.chars.filter(c => c.died < 0 && c.race === 'angel' && c.seat !== undefined && c.faction < 0 && c.act.kind === 'idle');
+  if (!host.length || !rng.chance(1 / 24)) return;
+  const holder = w.factions[sanctum.faction];
+  const power = host.reduce((t, c) => t + charPower(c, w) * 3, 0) + host.length * 60;
+  const def = garrison(w, sanctum) * 0.6;
+  const names = host.slice(0, 3).map(c => c.name).join(', ');
+  if (rng.chance(power / (power + def))) {
+    const nf = createFaction(w, 'angel', sanctum.name.replace(/의 .*$/, '') || sanctum.name, 1);
+    if (holder) inheritKnown(w, nf, holder);
+    transferSettlement(w, sanctum, nf);
+    nf.capital = sanctum.id;
+    nf.baseName = sanctum.name;
+    nf.name = factionName(nf);
+    const lead = host.slice().sort((a, b) => (a.seat ?? 99) - (b.seat ?? 99))[0];
+    for (const c of host) { c.faction = nf.id; c.home = sanctum.id; relocate(w, c, sanctum); charLog(w, c, `빼앗겼던 ${sanctum.name}을(를) 되찾았다.`, 4); }
+    crown(w, nf, lead, '탈환');
+    if (holder && holder.alive) { nf.relations[holder.id] = -80; declareWar(w, nf, holder, true); }
+    addNews(w, `하늘을 떠돌던 천사들(${names}${host.length > 3 ? ` 외 ${host.length - 3}명` : ''})이 한꺼번에 내려와 ${sanctum.name}을(를) 되찾았다. 빛의 나라가 다시 섰다.`, 5, 'hero', { pos: sanctum, chars: host.map(c => c.id), facs: [nf.id] });
+    return;
+  }
+  // 실패: 몇은 쓰러진다
+  const fallen = host.filter(() => rng.chance(0.25)).slice(0, 2);
+  for (const c of fallen) killChar(w, c, `${sanctum.name} 탈환전에서 전사`);
+  if (holder) sanctum.pop *= 0.92;
+  addNews(w, `천사들이 ${sanctum.name}을(를) 되찾으려 ${holder ? holder.name + '의 ' : ''}수비대에 뛰어들었으나 물러났다.${fallen.length ? ` ${fallen.map(c => c.name).join(', ')}이(가) 빛으로 흩어졌다.` : ''} 그들은 다시 올 것이다.`, 4, 'war', { pos: sanctum, chars: host.map(c => c.id) });
+}

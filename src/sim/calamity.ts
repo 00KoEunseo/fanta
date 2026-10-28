@@ -152,9 +152,36 @@ export function patronMonth(w: World, d: Character): Settlement | null {
     d.wealth += due;
     d.tributeMiss = Math.max(0, (d.tributeMiss ?? 0) - 1);
   } else d.tributeMiss = (d.tributeMiss ?? 0) + 1;
-  if ((d.tributeMiss ?? 0) >= 18) { betrayDragon(w, d, f, 'neglect'); return cap ?? null; }
+  if ((d.tributeMiss ?? 0) === 12) addNews(w, `한 해째 공물이 끊기자 수호룡 ${d.name}이(가) ${f.name}의 도성 위를 낮게 맴돌았다. 경고였다.`, 3, 'dark', { facs: [f.id], chars: [d.id] });
+  if ((d.tributeMiss ?? 0) >= 30) {
+    // 탐욕스러운 군주가 일부러 끊었다면 배신이다. 가난해서 못 바친 것이라면 용은 실망하여 떠날 뿐이다
+    const ld = leaderOf(w, f);
+    if (ld && ld.traits[2] > 60 && (cap?.stock[GOLD] ?? 0) > due * 6) { betrayDragon(w, d, f, 'neglect'); return cap ?? null; }
+    dropPatron(f, d);
+    d.dragonKind = 'recluse';
+    addNews(w, `공물이 끊긴 지 오래되자 수호룡 ${d.name}이(가) 실망하여 ${f.name}을(를) 떠나 둥지로 돌아갔다.`, 3, 'dark', { facs: [f.id], chars: [d.id] });
+    return null;
+  }
   const enemies = Object.keys(f.wars).map(id => w.factions[+id]).filter(e => e && e.alive);
-  if (enemies.length && rng.chance(0.05)) {
+  // 내 땅으로 진군해 오는 적군을 하늘에서 덮친다
+  if (enemies.length && w.t - (w.stats[`guard${d.id}`] ?? -99) >= 12 && rng.chance(0.06)) {
+    const mine = f.settlements.map(id => w.settlements[id]).filter(s => s && s.alive);
+    const foe = w.armies.find(a => a.alive && f.wars[a.faction] !== undefined && (a.goal === 'conquer' || a.goal === 'raid' || a.goal === 'holywar')
+      && mine.some(s => s.l === a.l && Math.hypot(s.x - a.x, s.y - a.y) < 22));
+    if (foe) {
+      const cut = Math.round(foe.soldiers * rng.float(0.3, 0.55));
+      foe.soldiers -= cut;
+      w.corpses += cut;
+      d.fame += 4;
+      const ef = w.factions[foe.faction];
+      if (foe.soldiers < 10) foe.alive = false;
+      w.stats[`guard${d.id}`] = w.t;
+      charLog(w, d, `${f.name}의 땅으로 진군하던 ${ef?.name ?? '적'}의 군대를 덮쳤다.`, 2);
+      addNews(w, `수호룡 ${d.name}이(가) ${f.name}의 땅으로 진군하던 ${ef?.name ?? '적'}의 군대를 하늘에서 덮쳤다. ${cut}명이 불길 속에 쓰러졌다.`, 3, 'war', { pos: foe, facs: [f.id, foe.faction], chars: [d.id] });
+      return null;
+    }
+  }
+  if (enemies.length && rng.chance(0.06)) {
     const targets = w.settlements.filter(s => s.alive && enemies.some(e => e.id === s.faction) && approxDist(w, d, s, true) < 50);
     if (targets.length) return rng.pick(targets);
   }
@@ -196,8 +223,8 @@ export function pSlayPatron(w: World, f: Faction): number {
   if (!f.flags.some(x => x.startsWith('patron:'))) return 0;
   const ld = leaderOf(w, f);
   if (!ld) return 0;
-  if (ld.traits[2] < 60 && !(ld.traits[3] < 35 && ld.traits[1] > 55)) return 0;
-  return 0.0015;
+  if (ld.traits[2] < 70 && !(ld.traits[3] < 30 && ld.traits[1] > 65)) return 0;
+  return 0.0006;
 }
 
 /** 원한이 셋 쌓이면 고대 용이 분노하여 깨어난다 */

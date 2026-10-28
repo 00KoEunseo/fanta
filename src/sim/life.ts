@@ -44,6 +44,9 @@ export type Cond = (x: Ctx) => boolean;
 /** 효과 처리기: 처리하지 않으면 null */
 export type FxHook = (x: Ctx, fx: string, data: Record<string, number | string>) => string | undefined | null;
 export const FX_HOOKS: FxHook[] = [];
+/** 반역이 실패한 '나'의 운명 (lifeData12가 넣어 준다: 서로를 불러오는 고리를 피하려고) */
+let coupFailFn: (x: Ctx) => string = () => '반역은 실패하였다.';
+export function setCoupFail(fn: (x: Ctx) => string): void { coupFailFn = fn; }
 export type Check = 'mi' | 'in' | 'ma' | 'co' | 'ch' | 'luck' | `t${number}`;
 
 export interface Eff {
@@ -254,6 +257,8 @@ export function nearDeath(w: World, c: Character, P: PlayerState, cause: string)
 export function buildPrompt(x: Ctx, ev: LifeEv): PlayerPrompt | null {
   const data = ev.data ? ev.data(x) : {};
   if (data === null) return null;
+  // 등장인물을 세우지 못했다 (고향이 없는 등): 이 이야기는 일어나지 않는다
+  for (const [k, v] of Object.entries(data)) if (k.endsWith('Id') && k !== 'siteId' && v === -1) return null;
   // 등장인물이 이미 세상에 없으면 이 이야기는 일어나지 않는다
   for (const [k, v] of Object.entries(data)) if (k.endsWith('Id') && typeof v === 'number' && v >= 0 && x.w.chars[v] && x.w.chars[v].died >= 0 && k !== 'siteId') return null;
   const jobOk = (o: Opt) => !o.ok.job || o.ok.job === '백수' || o.ok.job === '평민' || (RACE_JOBS[x.c.race] ?? []).includes(o.ok.job);
@@ -483,7 +488,11 @@ function runFx(x: Ctx, fx: string, data: PlayerPrompt['data']): string | void {
     case 'hero': awaken(w, c, 'hero', '그날,'); return;
     case 'sage': awaken(w, c, 'sage', '오랜 고민 끝에'); return;
     case 'seed': awaken(w, c, 'seed', '어둠의 유혹에 응하여'); return;
-    case 'coup': attemptCoup(w, c); return c.died >= 0 ? '' : x.f && x.f.leader === c.id ? '왕좌가 그의 것이 되었다!' : '반역은 실패하였다.';
+    case 'coup': {
+      const r = attemptCoup(w, c);
+      if (r === 'caught') { const t = coupFailFn(x); if (t === 'execute') { killChar(w, c, '반역죄로 처형', x.ld ?? undefined); return ''; } return t; }
+      return c.died >= 0 ? '' : x.f && x.f.leader === c.id ? '왕좌가 그의 것이 되었다!' : '반역은 실패하였다.';
+    }
     case 'move': {
       const s = w.settlements[+data.sId];
       if (s && s.alive) { c.home = s.id; c.faction = s.faction; relocate(w, c, s); }

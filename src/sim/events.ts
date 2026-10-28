@@ -17,7 +17,7 @@ import {
   addFacRel, addRel, aliveFactions, approxDist, charLabel, clamp, facRel, isAdult, isHero, leaderOf, settlementsOf,
 } from './helpers';
 import { awaken, createCharacter, duel, killChar } from './characters';
-import { aggrieve, createFaction, crown, declareWar, facDist, factionName, invalidateDist, launchAttack, makePeace, secede, transferSettlement } from './factions';
+import { aggrieve, createFaction, crown, declareWar, facDist, factionName, invalidateDist, isNeighbor, launchAttack, makePeace, secede, transferSettlement } from './factions';
 import { foundSettlement, hasFlag, setTimedFlag, findColonySite } from './settlements';
 import { brokenCount } from './doom';
 import { seatHolder } from './angels';
@@ -535,7 +535,7 @@ ev({
       o.alive = false; o.fell = w.t;
     }
     addNews(w, `와아아아! ${ld ? ld.name + '의 ' : ''}${f.name}이(가) 대침공을 선언하였다.${absorb.length ? ` ${absorb.slice(0, 2).map(o => o.name).join(', ')}이(가) 깃발 아래 합류하였다.` : ''}`, 4, 'war', { facs: [f.id], chars: ld ? [ld.id] : [] });
-    for (const o of aliveFactions(w)) if (o !== f && facDist(w, f, o) < 40 && facRel(f, o.id) < 0 && w.rngSim.chance(0.6)) declareWar(w, f, o, true);
+    for (const o of aliveFactions(w)) if (o !== f && (isNeighbor(w, f, o) || isNeighbor(w, o, f)) && facRel(f, o.id) < 0 && w.rngSim.chance(0.6)) declareWar(w, f, o, true);
   },
   forecast: (w, f: Faction) => ({ text: `${f.name}의 대침공`, imp: 4, cat: 'war' }),
 });
@@ -658,7 +658,7 @@ ev({
     setTimedFlag(f, 'greed_dig', w.t + 12 * 50);
     const r = rng.next();
     const ancientAlive = w.chars.some(c => c.died < 0 && c.ancient);
-    if (r < 0.3 && !ancientAlive) {
+    if (r < 0.12 && !ancientAlive) {
       const deep = w.sites.find(s => s.kind === 'deep');
       const d = spawnDragon(w, true, deep ?? cap);
       if (d) addNews(w, `${f.name}의 ${ld.name}이(가) 전설의 보물을 찾아 금지된 심연을 파헤치게 하였다. 그곳에 잠들어 있던 고대 용 ${d.name}이(가) 눈을 떴다.`, 5, 'doom', { pos: d, facs: [f.id], chars: [ld.id, d.id] });

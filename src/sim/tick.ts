@@ -12,7 +12,7 @@ import { eraTick } from './news';
 import type { World } from './state';
 import { dist } from './state';
 import { characterMonth, lifecycleMonth, restockSites, updateRank } from './characters';
-import { factionMonth, homelessMonth } from './factions';
+import { angelReclaim, factionMonth, homelessMonth } from './factions';
 import { armiesMonth } from './military';
 import { abandonCheck, recomputeTerritory, settlementMonth } from './settlements';
 import { territoryMonth } from './territory';
@@ -49,6 +49,7 @@ export function tick(w: World): void {
   assignPioneers(w, (w2, f, from, size, cmd, dest) => raiseArmy(w2, f, from, 'clear', null, size, cmd, dest));
 
   for (const f of w.factions) if (f.alive) factionMonth(w, f);
+  angelReclaim(w);
 
   for (const c of w.chars) {
     if (c.died >= 0) continue;

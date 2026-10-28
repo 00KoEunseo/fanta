@@ -233,8 +233,12 @@ function partyMonth(w: World, p: Party): void {
       addNews(w, `${p.name}이(가) 마왕군 간부 ${o.name}을(를) 쓰러뜨렸다! 마왕의 옥좌가 가까워진다.`, 4, 'hero', { chars: p.members });
     }
   }
-  addNews(w, `${p.name}이(가) 마침내 ${charLabel(w, enemy)}과(와) 마주하였다.`, 4, 'hero', { pos: enemy, chars: [enemy.id, ...p.members] });
   const hero = alive.find(m => isHero(m));
+  // 용사가 이끄는 결전은 용사의 이름으로 기록된다
+  if (hero && w.demonLord === enemy.id) {
+    addNews(w, `용사 ${hero.name}이(가) ${p.name}을(를) 이끌고 마침내 마왕 ${enemy.name}의 옥좌 앞에 섰다. "${['네 시대는 오늘 끝난다.', '빛이 너를 심판하러 왔다.', '쓰러진 이들의 이름으로.'][(w.t + hero.id) % 3]}"`, 5, 'hero', { pos: enemy, chars: [hero.id, enemy.id, ...p.members] });
+    charLog(w, hero, `마왕 ${enemy.name}과(와) 마주 섰다.`, 5);
+  } else addNews(w, `${p.name}이(가) 마침내 ${charLabel(w, enemy)}과(와) 마주하였다.`, 4, 'hero', { pos: enemy, chars: [enemy.id, ...p.members] });
   if (hero && w.demonLord === enemy.id && w.rngSim.chance(0.008)) {
     hero.act = { kind: 'idle' };
     p.members = p.members.filter(id => id !== hero.id);
@@ -242,10 +246,16 @@ function partyMonth(w: World, p: Party): void {
     disband(w, p, `${p.name}의 남은 이들은 넋을 잃고 마왕성을 떠났다.`);
     return;
   }
+  const wasDL = w.demonLord === enemy.id;
   const won = teamFight(w, p, enemy, w.demonLord === enemy.id ? '마왕과의 결전' : '용과의 결전');
   if (won) {
-    disband(w, p, `${p.name}이(가) ${enemy.name}을(를) 쓰러뜨렸다! 살아남은 이들의 이름이 노래가 되었다.`);
-  } else disband(w, p, `${p.name}이(가) ${enemy.name} 앞에서 무너졌다. 살아 돌아온 이는 몇 되지 않았다.`);
+    if (hero && wasDL && hero.died < 0) { hero.fame += 100; hero.honor += 30; charLog(w, hero, `마왕 ${enemy.name}을(를) 쓰러뜨렸다.`, 5); }
+    disband(w, p, hero && hero.died < 0 && wasDL
+      ? `용사 ${hero.name}의 검이 마왕 ${enemy.name}의 심장을 꿰뚫었다! ${p.name}의 이름과 함께, 그날은 오래도록 노래가 되었다.`
+      : `${p.name}이(가) ${enemy.name}을(를) 쓰러뜨렸다! 살아남은 이들의 이름이 노래가 되었다.`);
+  } else disband(w, p, hero && hero.died >= 0 && wasDL
+    ? `용사 ${hero.name}이(가) 마왕 ${enemy.name} 앞에서 쓰러졌다. ${p.name}은(는) 무너졌고, 세상은 다시 어둠을 기다린다.`
+    : `${p.name}이(가) ${enemy.name} 앞에서 무너졌다. 살아 돌아온 이는 몇 되지 않았다.`);
 }
 
 /** 영웅이 토벌대를 꾸리려 한다 (characters.heroHunt 에서 부른다) */
@@ -486,7 +496,11 @@ function dlMarch(w: World, dl: Character, dlf: Faction, officers: Character[]): 
       const d = approxDist(w, s, tree);
       if (isFinite(d) && d < 60) { best = { src: s, t: tree, d }; break; }
     }
-    if (best?.t === tree) addNews(w, `마왕 ${dl.name}의 군세가 세계수를 향해 방향을 틀었다. 빛의 땅의 뿌리를 끊으려는 것이다.`, 5, 'doom', { pos: tree, facs: [dlf.id, tree.faction] });
+    // 같은 진군을 해마다 큰 소식으로 되풀이하지 않는다 (다섯 해에 한 번)
+    if (best?.t === tree && w.t - (w.stats.treeMarchNews ?? -999) >= 60) {
+      w.stats.treeMarchNews = w.t;
+      addNews(w, `마왕 ${dl.name}의 군세가 세계수를 향해 방향을 틀었다. 빛의 땅의 뿌리를 끊으려는 것이다.`, 5, 'doom', { pos: tree, facs: [dlf.id, tree.faction] });
+    }
   }
   // 하늘로 가는 길이 열려 있으면 더 가까운 길로 천상의 성역을 노린다
   const sanctum = w.settlements.find(s => s.alive && s.flags.includes('sanctum') && s.faction !== dlf.id);

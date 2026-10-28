@@ -14,11 +14,13 @@
 | `npx tsx scripts/qa/save-size.ts <시드> <년>` | 저장 파일에서 무엇이 자리를 차지하는지 | 약 1분 |
 | `npx tsx scripts/qa/contact-check.ts <시드들>` | 첫 조우·첫 교역·첫 전쟁, 소문과 층 발견 | 약 3분 |
 | `npx tsx scripts/qa/religion-check.ts <시드들> <년>` | 신앙의 탄생·전파·국교·대신관·성전 명분 | 약 3분 |
-| `npx tsx scripts/qa/camp-check.ts <시드들> <년>` | 주둔지 세움·출격·철수·함락 | 약 3분 |
+| `npx tsx scripts/qa/camp-check.ts <시드들> <년>` | 주둔지 세움·출격·철수·함락, 엇갈린 주둔지 | 약 3분 |
 | `npx tsx scripts/qa/paragon-check.ts <시드들> <년>` | 열강의 등장·종족·목적별 행적·도전자 | 약 3분 |
 | `npx tsx scripts/qa/diag.ts <시드> <년>` | 층·종족별 인물과 인구, 전쟁 기간·거리·같은 성향, 교역 거리, 천사 일대기 | 약 2분 |
 | `npx tsx scripts/qa/demon-check.ts <시드들> <년>` | 악마 예순여섯의 행적, 마족의 수와 노는 비율 | 약 3분 |
 | `npx tsx scripts/qa/doom-rate.ts <세계 수> <년>` | 세계 여럿을 돌려 멸망 빈도, 봉인 넷 이상인 달, 전쟁·인물 분포를 잰다 | 24개면 약 15분 |
+| `npx tsx scripts/qa/issues.ts <시드들> <년>` | 4차 점검 지표: 전쟁 거리·이웃 비율, 대치·야전·스쳐 지나간 군대, 엇갈린 주둔지, 고대 용·원한·수호룡, 천사의 거취, 마족 수, 반란의 수명과 동참, 심연의 군주, 하늘 용, 성역, 용사와 마왕 | 세계 6개 300년이면 약 40분 |
+| `npx tsx scripts/qa/life-density.ts <생애 수> <시작 번호>` | 탄생 모드의 밀도: 어린 시절 선택지 수·종류, 길 위의 일 종류, 반역·옥살이·추방·함락 소식 | 16생애 약 15분 |
 | `npx tsx scripts/qa/compat.ts <저장 파일>` | 예전 코드로 만든 저장 파일을 지금 코드로 불러와 30년 진행·화면·재저장을 확인한다 | 약 1분 |
 | `npx tsx scripts/qa/ui-smoke.ts <시드> <년>` | 모든 탭·정보창의 HTML을 만들어 오류·빈 값·조사 표기를 찾는다 (audit에 포함) | 약 1분 |
 

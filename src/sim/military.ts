@@ -11,7 +11,7 @@ import { EPITHETS } from '../data/names';
 import { addNews, charLog } from './news';
 import { MOVE_FLY, MOVE_WALK, advance, findPath, posOf } from './path';
 import type { Army, ArmyGoal, Character, Faction, Pos, Settlement, World } from './state';
-import { campsMonth, joinCamp, returnToCamp } from './camps';
+import { campsMonth, fieldCamp, joinCamp, returnToCamp } from './camps';
 import { learn } from './contact';
 import { addFacRel, charLabel, clamp, isAdult, leaderOf, rel, charPower } from './helpers';
 import { awaken, killChar, setPos } from './characters';
@@ -100,6 +100,8 @@ export function garrison(w: World, s: Settlement): number {
     if (dragon && dragon.died < 0) d += 300;
   }
   if (f?.flags.includes('knights')) d *= 1.1;
+  // 갓 들고 일어선 나라는 결기로 버틴다
+  if (f && hasFlag(f, 'uprising', w.t)) d *= 1.5;
   d *= RACE_FORTIFY[s.race] ?? 1;
   if (s.flags.includes('worldtree') || s.flags.includes('sanctum')) d *= 1.8;
   // 다 자란 세계수는 뿌리와 가지로 그 고을을 감싼다
@@ -124,6 +126,8 @@ export function armiesMonth(w: World): void {
   for (const a of w.armies) {
     if (!a.alive) continue;
     a.pl = a.l; a.px = a.x; a.py = a.y;
+    // 대치 중인 군대는 진지에 머문다
+    if (a.hold !== undefined) { syncCommander(w, a); continue; }
     a.age++;
     const fly = RACES[a.race].flying;
     if (a.path.length) {
@@ -135,14 +139,23 @@ export function armiesMonth(w: World): void {
     if (a.path.length && a.age < 150) continue;
     arrive(w, a);
   }
-  // 야전: 전쟁 중인 두 군대가 마주치면 싸운다
-  const live = w.armies.filter(a => a.alive && a.goal !== 'colonize' && a.goal !== 'clear');
+  // 대치가 끝난 군대는 맞붙는다 (상대가 사라졌으면 다시 길을 간다)
+  for (const a of w.armies) {
+    if (!a.alive || a.hold === undefined || w.t < a.hold) continue;
+    const b = w.armies[a.foe ?? -1];
+    a.hold = undefined; a.foe = undefined;
+    if (b && b.alive && b.foe === a.id) { b.hold = undefined; b.foe = undefined; fieldBattle(w, a, b); }
+  }
+  // 길에서 마주침: 이번 달 걸어온 길이 서로 스치면 (지나쳐 버리지 않도록) 멈춰 선다
+  const live = w.armies.filter(a => a.alive && a.goal !== 'colonize' && a.goal !== 'clear' && a.hold === undefined);
   for (let i = 0; i < live.length; i++) for (let j = i + 1; j < live.length; j++) {
     const a = live[i], b = live[j];
-    if (!a.alive || !b.alive || a.l !== b.l || Math.abs(a.x - b.x) > 2 || Math.abs(a.y - b.y) > 2) continue;
-    const fa = w.factions[a.faction];
-    if (!fa || fa.wars[b.faction] === undefined) continue;
-    fieldBattle(w, a, b);
+    if (!a.alive || !b.alive || a.hold !== undefined || b.hold !== undefined || a.l !== b.l || a.faction === b.faction) continue;
+    if (a.pl !== a.l || b.pl !== b.l || crossGap(a, b) > 2) continue;
+    const fa = w.factions[a.faction], fb = w.factions[b.faction];
+    if (!fa || !fb) continue;
+    if (fa.wars[b.faction] !== undefined) standoff(w, a, b, fa, fb);
+    else meetNeutral(w, a, b, fa, fb);
   }
   if (w.armies.length > 400) w.armies = w.armies.filter((a, i) => a.alive || i >= w.armies.length - 50).map((a, i) => { a.id = i; return a; });
   remapCommanders(w);
@@ -293,6 +306,56 @@ function arrive(w: World, a: Army): void {
   }
 }
 
+/** 이번 달 두 군대가 걸어온 길 사이의 가장 가까운 거리 (같은 시각끼리 견준다), 그리고 그 시각 */
+function closest(a: Army, b: Army): { d: number; t: number } {
+  let best = { d: Infinity, t: 1 };
+  for (let s = 0; s <= 6; s++) {
+    const t = s / 6;
+    const d = Math.hypot(a.px + (a.x - a.px) * t - (b.px + (b.x - b.px) * t), a.py + (a.y - a.py) * t - (b.py + (b.y - b.py) * t));
+    if (d < best.d) best = { d, t };
+  }
+  return best;
+}
+const crossGap = (a: Army, b: Army) => closest(a, b).d;
+
+/** 전쟁 중인 두 군대가 길에서 맞닥뜨렸다: 그 자리에 진을 치고 대치하다가 맞붙는다 */
+function standoff(w: World, a: Army, b: Army, fa: Faction, fb: Faction): void {
+  const rng = w.rngSim;
+  // 스친 자리로 되돌아가 마주 선다
+  const { t } = closest(a, b);
+  for (const x of [a, b]) { x.x = Math.round(x.px + (x.x - x.px) * t); x.y = Math.round(x.py + (x.y - x.py) * t); syncCommander(w, x); }
+  const until = w.t + rng.int(1, 3);
+  a.hold = until; a.foe = b.id;
+  b.hold = until; b.foe = a.id;
+  const near = w.settlements.filter(s => s.alive && s.l === a.l).sort((p, q) => dist(p, a) - dist(q, a))[0];
+  const where = near && dist(near, a) < 14 ? `${near.name} 근처 들판에서` : '길 위에서';
+  addNews(w, `${fa.name}의 군대(${Math.round(a.soldiers)})와 ${fb.name}의 군대(${Math.round(b.soldiers)})가 ${where} 맞닥뜨렸다. 양쪽이 진을 치고 서로를 노려본다.`, 2, 'war', { pos: a, facs: [fa.id, fb.id] });
+}
+
+/** 싸우지 않는 두 나라의 군대가 길에서 마주쳤다 */
+function meetNeutral(w: World, a: Army, b: Army, fa: Faction, fb: Faction): void {
+  const rng = w.rngSim;
+  if (a.soldiers < 30 || b.soldiers < 30 || !rng.chance(0.4)) return;
+  const r = Math.min(fa.relations[fb.id] ?? 0, fb.relations[fa.id] ?? 0);
+  if (r >= 25) {
+    addFacRel(w, fa, fb, 2);
+    if (rng.chance(0.3)) addNews(w, `길에서 마주친 ${fa.name}과(와) ${fb.name}의 군대가 깃발을 내려 인사하고 서로 길을 비켜 주었다.`, 1, 'politics', { pos: a, facs: [fa.id, fb.id] });
+    return;
+  }
+  if (r > -30) return;
+  // 사이가 나쁜 나라의 군대: 칼자루를 쥔 채 지나치거나, 드물게 시비가 칼부림이 된다
+  if (rng.chance(0.12)) {
+    const la = a.soldiers * rng.float(0.05, 0.15), lb = b.soldiers * rng.float(0.05, 0.15);
+    a.soldiers -= la; b.soldiers -= lb; w.corpses += la + lb;
+    addFacRel(w, fa, fb, -15);
+    aggrieve(w, fb, fa, '길에서 벌어진 칼부림');
+    addNews(w, `길에서 마주친 ${fa.name}과(와) ${fb.name}의 군대 사이에 시비가 붙어 칼부림이 벌어졌다. 전쟁은 아니었으나 양쪽 모두 피를 흘렸다.`, 2, 'war', { pos: a, facs: [fa.id, fb.id] });
+  } else {
+    addFacRel(w, fa, fb, -4);
+    if (rng.chance(0.3)) addNews(w, `${fa.name}과(와) ${fb.name}의 군대가 길에서 마주쳤다. 양쪽 병사들은 칼자루를 쥔 채 서로를 지나쳤다.`, 1, 'war', { pos: a, facs: [fa.id, fb.id] });
+  }
+}
+
 function fieldBattle(w: World, a: Army, b: Army): void {
   const rng = w.rngSim;
   const pa = Math.pow(armyPower(w, a), 1.3), pb = Math.pow(armyPower(w, b), 1.3);
@@ -311,6 +374,12 @@ function fieldBattle(w: World, a: Army, b: Army): void {
   if (lose.soldiers < 10) disband(w, lose);
   else goHomeArmy(w, lose);
   fl.warWeariness += 5;
+  // 이긴 군대는 싸운 자리에 진지를 세우고 버틴다 (전선이 그만큼 앞으로 나아간다)
+  const tgt = w.settlements[win.target];
+  if ((win.goal === 'conquer' || win.goal === 'holywar') && !win.toCamp && win.camp === undefined && tgt && tgt.alive && tgt.l === win.l && dist(tgt, win) > 8) {
+    const camp = fieldCamp(w, fw, fl, win, win.home);
+    if (camp) { win.camp = camp.id; win.toCamp = true; joinCamp(w, win); }
+  }
 }
 
 /** 정착지 점령 */
@@ -333,10 +402,11 @@ export function captureSettlement(w: World, s: Settlement, f: Faction, by?: Char
   if (s.flags.includes('sanctum') && RACES[f.race].align === 'dark') {
     addNews(w, `천상의 성역이 ${f.name}에게 짓밟혔다. 하늘에서 빛이 사라졌다.`, 5, 'doom', { pos: s, facs: [f.id] });
     const lord = w.chars[w.demonLord];
-    if (lord && lord.died < 0 && lord.faction === f.id && !w.doom.ended) {
+    // 마왕의 나라든, 마왕에게 무릎 꿇은 가신의 나라든: 마왕의 깃발 아래 성역이 떨어지면 하늘의 왕좌는 마왕의 것이다
+    if (lord && lord.died < 0 && (lord.faction === f.id || f.flags.includes('dlvassal')) && !w.doom.ended) {
       w.doom.ended = true;
       w.stats.skyThrone = 1;
-      w.doom.endText = `마왕 ${lord.name}의 군세가 천상의 성역을 짓밟았다. 마지막 천사가 날개를 접었고, 마왕은 빛의 옥좌에 앉아 하늘을 지배하였다. 이제 하늘도 땅도 마왕의 것이다. 세계의 역사는 마왕의 연대기로 바뀌었다.`;
+      w.doom.endText = `${lord.faction === f.id ? '' : `마왕의 가신 ${f.name}이(가) 성역의 문을 부수었다. `}마왕 ${lord.name}의 군세가 천상의 성역을 짓밟았다. 마지막 천사가 날개를 접었고, 마왕은 빛의 옥좌에 앉아 하늘을 지배하였다. 이제 하늘도 땅도 마왕의 것이다. 세계의 역사는 마왕의 연대기로 바뀌었다.`;
       addNews(w, `【하늘의 왕좌】 ${w.doom.endText}`, 5, 'doom', { pos: s, chars: [lord.id] });
       w.cinematics.push({ kind: 'end', seal: -2, title: '하늘의 왕좌', text: w.doom.endText });
     }
@@ -346,11 +416,20 @@ export function captureSettlement(w: World, s: Settlement, f: Faction, by?: Char
   disasterStrikes(w, s, 'fallen', `${s.name} 함락 때 목숨을 잃음`, dlTook ? 0.2 : 0.06, by);
   // 주민 인물들의 운명
   for (const c of w.chars) {
+    // 길을 떠난 사이 고향이 떨어졌다: 소식이 길 위의 '나'에게 닿는다
+    if (c.isPlayer && c.died < 0 && c.home === s.id && c.act.kind !== 'idle' && c.act.kind !== 'army' && c.act.kind !== 'prison') { markPeril(w, 'fallenAway', s); continue; }
     if (c.died >= 0 || c.home !== s.id || c.act.kind !== 'idle') continue;
     if (!old) continue;
     if (c.id === old.leader) continue;
     // '나'의 거취는 내가 정한다 (함락의 선택지가 뜬다)
     if (c.isPlayer) { markPeril(w, 'fallen', s); continue; }
+    // 천사는 무릎 꿇지 않는다: 제 나라의 다른 땅으로 물러나거나, 홀로 남아 되찾을 날을 기다린다
+    if (c.race === 'angel') {
+      const other = old.settlements.map(id => w.settlements[id]).find(x => x && x.alive && x.faction === old.id);
+      if (other) { c.home = other.id; relocate(w, c, other); charLog(w, c, `${s.name}을(를) 빼앗기고 ${other.name}(으)로 물러났다. 되찾을 날을 맹세하였다.`, 3); }
+      else { c.home = -1; c.faction = -1; charLog(w, c, `${s.name}을(를) 빼앗겼다. 무릎 꿇지 않고 하늘을 떠돌며 되찾을 날을 기다린다.`, 3); }
+      continue;
+    }
     if (c.traits[LOYALTY] > 55 || rel(c, old.leader) > 30) {
       const other = old.settlements.map(id => w.settlements[id]).find(x => x && x.alive && x.faction === old.id);
       if (other) { c.home = other.id; relocate(w, c, other); charLog(w, c, `${s.name}이(가) 함락되자 ${other.name}(으)로 피난하였다.`, 2); }

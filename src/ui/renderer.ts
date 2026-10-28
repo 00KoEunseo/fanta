@@ -4,6 +4,7 @@ import type { Character, World } from '../sim/state';
 import { isHero } from '../sim/helpers';
 import { SEAL_THEME } from './cinema';
 import { posOf } from '../sim/path';
+import { TENTACLE_HP } from '../sim/sea';
 
 export type MapMode = 'terrain' | 'political' | 'resource' | 'development';
 
@@ -36,6 +37,8 @@ export class MapRenderer {
   private terrainCache: (HTMLCanvasElement | null)[] = [];
   private overlay: HTMLCanvasElement[] = [];
   private borders: Path2D[] = [];
+  /** 전선: 전쟁 중인 두 나라의 땅이 맞닿은 국경 */
+  private fronts: Path2D[] = [];
   private resourceCache: (HTMLCanvasElement | null)[] = [];
   private dpr = 1;
   private w: World | null = null;
@@ -106,6 +109,16 @@ export class MapRenderer {
         if (y === 0 || L.owner[(y - 1) * L.w + x] !== o) { p.moveTo(x, y); p.lineTo(x + 1, y); }
       }
       this.borders[L.id] = p;
+      // 전선: 서로 싸우는 두 나라의 땅이 맞닿은 금
+      const fr = new Path2D();
+      const atWar = (a: number, b: number) => a >= 0 && b >= 0 && a !== b && w.factions[a]?.wars[b] !== undefined;
+      for (let y = 0; y < L.h; y++) for (let x = 0; x < L.w; x++) {
+        const o = L.owner[y * L.w + x];
+        if (o < 0) continue;
+        if (x + 1 < L.w && atWar(o, L.owner[y * L.w + x + 1])) { fr.moveTo(x + 1, y); fr.lineTo(x + 1, y + 1); }
+        if (y + 1 < L.h && atWar(o, L.owner[(y + 1) * L.w + x])) { fr.moveTo(x, y + 1); fr.lineTo(x + 1, y + 1); }
+      }
+      this.fronts[L.id] = fr;
     }
   }
 
@@ -202,6 +215,12 @@ export class MapRenderer {
       ctx.strokeStyle = 'rgba(255,240,200,0.55)';
       ctx.lineWidth = Math.max(0.06, 1.2 / s);
       ctx.stroke(this.borders[cam.l]);
+      // 전선은 붉게 맥동한다 (군대 표시를 켰을 때)
+      if (this.showArmies && this.fronts[cam.l]) {
+        ctx.strokeStyle = `rgba(255,60,40,${0.55 + 0.3 * Math.sin(now / 300)})`;
+        ctx.lineWidth = Math.max(0.15, 3 / s);
+        ctx.stroke(this.fronts[cam.l]);
+      }
       ctx.restore();
     }
 
@@ -377,7 +396,7 @@ export class MapRenderer {
           if (t.alive) {
             const bw = Math.max(20, s * 2.2), by = ty + sz * 0.6;
             ctx.fillStyle = 'rgba(0,0,0,0.75)'; ctx.fillRect(tx - bw / 2 - 1, by - 1, bw + 2, 5);
-            const v = Math.max(0, t.hp) / 250;
+            const v = Math.min(1, Math.max(0, t.hp) / TENTACLE_HP);
             ctx.fillStyle = v > 0.5 ? '#3affb0' : v > 0.25 ? '#e0d040' : '#ff5a4a';
             ctx.fillRect(tx - bw / 2, by, bw * v, 3);
           }

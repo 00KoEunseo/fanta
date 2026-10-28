@@ -26,7 +26,7 @@ export const PERIL: LifeEv[] = [
   { id: 'xh_fallen', t: '함락', cd: 6, c: all(adult, fresh('fallen')),
     x: x => `${perilSet(x)}이(가) ${x.w.factions[x.w.settlements[x.P.flags?.perilSet ?? -1]?.faction ?? -1]?.name ?? '적'}의 손에 떨어졌다. 낯선 깃발이 성문 위에서 펄럭인다.`,
     o: [o('새 주인에게 머리를 숙인다', { r: '살아남는 것이 먼저였다.', fx: 'bow', honor: -5, unflag: 'peril_fallen' }),
-      o('옛 나라의 땅으로 피난한다', { r: '짐 보따리 하나만 들고 성문을 빠져나왔다.', fx: 'flee_home', unflag: 'peril_fallen' }),
+      o('옛 나라의 땅으로 피난한다', { r: '짐 보따리 하나만 들고 성문을 빠져나왔다.', fx: 'flee_home', unflag: 'peril_fallen' }, '성문에서 붙잡힐 수 있다', ['luck', 0.7], { r: '성문을 빠져나가다 붙잡혔다.', fx: 'captured', unflag: 'peril_fallen' }),
       o('남아서 저항군에 가담한다', { r: '지하실에 모인 이들과 피로 맹세하였다.', honor: 10, unflag: 'peril_fallen', seed: ['resistance', '{h}을(를) 되찾으려는 저항군'] }, '', ['luck', 0.75], { r: '첫 모임에서 밀고를 당해 붙잡혔다. 매질 끝에 풀려났다.', hp: -30, unflag: 'peril_fallen' })] },
   { id: 'xh_abyss', t: '바다에서 솟은 것', cd: 12, c: all(adult, x => fresh('abyss')(x) || fresh('beast')(x)),
     x: x => `${perilSet(x)}의 해안으로 ${x.P.flags?.peril_abyss !== undefined ? '집채만 한 촉수가' : '거대한 바다 괴수가'} 솟아올랐다. 부두가 통째로 바다에 삼켜졌다.`,

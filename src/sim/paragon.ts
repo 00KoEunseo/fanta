@@ -135,7 +135,8 @@ function pickTask(w: World, c: Character): { kind: string; target: number } | nu
       return s && s.stock[GOLD] > 50 ? { kind: 'plunder', target: s.id } : null;
     }
     case 'glory': {
-      const foe = w.chars.filter(o => o.died < 0 && o !== c && o.l === c.l && dist(o, c) < 60 && (isParagon(o) || isHero(o) || (o.race === 'dragon' && !o.ancient) || o.fame > 150))
+      // 마왕은 명예의 결투 상대가 아니다 (마왕을 쓰러뜨리는 일은 용사와 토벌대의 몫)
+      const foe = w.chars.filter(o => o.died < 0 && o !== c && o.l === c.l && dist(o, c) < 60 && w.demonLord !== o.id && !o.officer && (isParagon(o) || isHero(o) || (o.race === 'dragon' && !o.ancient) || o.fame > 150))
         .sort((a, b) => charPower(b, w) - charPower(a, w))[0];
       return foe ? { kind: 'duel', target: foe.id } : null;
     }
