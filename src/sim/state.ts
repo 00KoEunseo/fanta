@@ -281,6 +281,8 @@ export interface PlayerChoice {
   /** 결과 수치 미리 보기 (성공 / 실패) */
   preview?: string;
   failPreview?: string;
+  /** 글을 직접 써 넣는 선택지 (예: 아이 이름). 고른 값은 '선택지id:글'로 돌아온다 */
+  input?: string;
 }
 export interface PlayerPrompt {
   eventId: string;

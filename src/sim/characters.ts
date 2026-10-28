@@ -513,7 +513,22 @@ function actionScores(w: World, c: Character): Record<ActionKey, number> {
   return s;
 }
 
+/** 길을 떠나지 않는 직업: '나'가 이 일을 하는 동안에는 모험의 바람이 덜 분다 */
+const HOMEBOUND = new Set<Role>(['평민', '농부', '광부', '대장장이', '장인', '학자', '성직자', '치유사', '상인', '연금술사', '음유시인', '함정꾼', '조련사', '노예']);
+
+/** '나'가 스스로 길을 떠나려 한다: 길은 잡아 두되 떠날지 먼저 묻는다 (1 모험 · 2 교역 · 3 순례). 물었으면 true (아니면 길을 거둔다) */
+export function offerTrip(w: World, c: Character, kind: number, target: number): boolean {
+  const P = w.player;
+  if (!P) return false;
+  P.flags ??= {};
+  // 한 번 마다하면 한동안은 다시 묻지 않는다
+  if (w.t - (P.flags.tripNo ?? -99) < 18 || w.t - (P.flags.tripT ?? -99) < 6) return false;
+  P.flags.tripKind = kind; P.flags.tripTarget = target; P.flags.tripT = w.t;
+  return true;
+}
+
 function applyPlayerPath(w: World, c: Character, s: Record<ActionKey, number>) {
+  if (HOMEBOUND.has(c.role) && w.player?.path !== 'wanderer') s.adventure *= 0.3;
   const p = w.player?.path;
   if (p === 'warrior') s.train += 1;
   if (p === 'scholar') s.study += 1.2;
@@ -682,7 +697,9 @@ function doAction(w: World, c: Character, act: ActionKey): void {
       const dests = w.settlements.filter(s => s.alive && s.id !== c.home && s.l === c.l && dist(s, c) < 24 * reachFactor(w)
         && (s.faction === c.faction || (f && knows(w, f, s.faction) && (f.relations[s.faction] ?? 0) > -10 && f.wars[s.faction] === undefined)));
       const dest = dests.length ? rng.pick(dests) : undefined;
-      if (dest && setTravel(w, c, dest, 'trade')) charLog(w, c, `교역품을 싣고 ${dest.name}(으)로 길을 나섰다.`, c.isPlayer ? 2 : 1);
+      // 상인에게 교역길은 일이다: 묻지 않고 떠난다 (다른 '나'는 떠날지 묻는다)
+      if (dest && c.isPlayer && c.role !== '상인') { if (!(setTravel(w, c, dest, 'trade') && offerTrip(w, c, 2, dest.id))) { c.act = { kind: 'idle' }; c.wealth += rng.float(2, 6); charLog(w, c, marketLine(w, c)); } }
+      else if (dest && setTravel(w, c, dest, 'trade')) charLog(w, c, `교역품을 싣고 ${dest.name}(으)로 길을 나섰다.`, c.isPlayer ? 2 : 1);
       else { c.wealth += rng.float(2, 6); charLog(w, c, marketLine(w, c)); }
       break;
     }
@@ -691,7 +708,9 @@ function doAction(w: World, c: Character, act: ActionKey): void {
       const sites = w.sites.filter(s => (s.loot > 0 || s.relic) && s.kind !== 'deep' && knowsRealm(f, s.l) && approxDist(w, c, s) < 30 * reachFactor(w));
       if (sites.length) {
         const site = rng.pick(sites);
-        if (setTravel(w, c, site, 'adventure', site.id)) { charLog(w, c, `${site.name}의 소문을 듣고 모험을 떠났다.`, 2); break; }
+        // '나'는 스스로 떠날지 고른다
+        if (c.isPlayer) { if (setTravel(w, c, site, 'adventure', site.id) && offerTrip(w, c, 1, site.id)) break; c.act = { kind: 'idle' }; }
+        else if (setTravel(w, c, site, 'adventure', site.id)) { charLog(w, c, `${site.name}의 소문을 듣고 모험을 떠났다.`, 2); break; }
       }
       wander(w, c);
       charLog(w, c, '모험거리를 찾아 주변을 헤맸다.');
@@ -779,7 +798,8 @@ function doAction(w: World, c: Character, act: ActionKey): void {
     case 'pilgrim': {
       // 믿는 신앙이 있고, 그 성지를 알 때만 순례를 떠난다 (신앙 없는 세상에는 순례도 없다)
       const holy = pilgrimSite(w, c, f);
-      if (holy && setTravel(w, c, holy, 'pilgrim', holy.id)) charLog(w, c, `${holy.name}(으)로 순례를 떠났다.`, 2);
+      if (holy && c.isPlayer) { if (!(setTravel(w, c, holy, 'pilgrim', holy.id) && offerTrip(w, c, 3, holy.id))) { c.act = { kind: 'idle' }; charLog(w, c, prayLine(w, c)); } }
+      else if (holy && setTravel(w, c, holy, 'pilgrim', holy.id)) charLog(w, c, `${holy.name}(으)로 순례를 떠났다.`, 2);
       else charLog(w, c, prayLine(w, c));
       break;
     }
@@ -1174,7 +1194,7 @@ export function pDeathMonth(w: World, c: Character): number {
   if (age > L * 0.7) p += 0.004 * Math.exp((age - L) / (L * 0.07));
   if (c.stats.health < 30) p += (30 - c.stats.health) * 0.0012;
   const home = w.settlements[c.home];
-  if (home && home.plague > 0) p += w.diseases[home.disease ?? -1]?.great ? 0.012 : 0.006;
+  if (home && home.plague > 0) p += w.diseases[home.disease ?? -1]?.great ? 0.008 : 0.006;
   if (c.items.includes('현자의 돌')) p *= 0.5;
   return Math.min(0.5, p);
 }
@@ -1194,7 +1214,8 @@ function namedQuota(w: World): { quota: Map<string, number>; members: Map<string
     total += s.pop;
   }
   const quota = new Map<string, number>();
-  for (const [k, p] of pop) quota.set(k, Math.max(2, Math.min(50, Math.round(NAMED_BUDGET * p / Math.max(1, total)))));
+  // 수백 년을 사는 겨레(마족)는 한 번 이름을 얻으면 오래 남으니 최소 몫을 하나로 둔다
+  for (const [k, p] of pop) quota.set(k, Math.max(RACES[k.split(':')[1] as RaceKey].lifespan[0] > 300 ? 1 : 2, Math.min(50, Math.round(NAMED_BUDGET * p / Math.max(1, total)))));
   return { quota, members };
 }
 
@@ -1204,7 +1225,7 @@ export function lifecycleMonth(w: World): void {
   const crowd = alive.length;
   const { quota, members } = namedQuota(w);
   // 몫에 견주어 얼마나 찼는가 (1: 꼭 맞음)
-  const fill = (fid: number, race: string) => (members.get(`${fid}:${race}`) ?? 0) / (quota.get(`${fid}:${race}`) ?? 2);
+  const fill = (fid: number, race: string) => (members.get(`${fid}:${race}`) ?? 0) / (quota.get(`${fid}:${race}`) ?? (RACES[race as RaceKey]?.lifespan[0] > 300 ? 1 : 2));
   for (const c of alive) {
     // 악마는 늙거나 앓아 죽지 않는다 (쓰러뜨려야 죽는다)
     if (!c.ancient && !c.archdemon && rng.chance(pDeathMonth(w, c))) {
@@ -1222,7 +1243,8 @@ export function lifecycleMonth(w: World): void {
       const mine = c.isPlayer || !!sp?.isPlayer;
       const r = fill(c.faction, c.race);
       const room = r < 0.7 ? 1.5 : r < 1 ? 1 : r < 1.3 ? 0.3 : 0.05;
-      const fert = Math.min(0.03, R.growth * 4.5) * (c.children.length >= (mine ? 8 : 5) ? 0.15 : 1) * (mine ? 1 : room * (crowd > 1100 ? 0.05 : 1));
+      // 수백 년을 사는 겨레는 아이를 낳을 수 있는 세월도 수백 년이니 해마다는 드물게 낳는다
+      const fert = Math.min(0.03, R.growth * 4.5) * (R.lifespan[0] > 300 ? 0.3 : 1) * (c.children.length >= (mine ? 8 : 5) ? 0.15 : 1) * (mine ? 1 : room * (crowd > 1100 ? 0.05 : 1));
       // 한집에 살거나 곁에 있으면 아이가 들어선다
       const together = !!sp && (sp.home === c.home || (sp.l === c.l && dist(sp, c) < 8));
       if (sp && sp.died < 0 && together && rng.chance(fert)) {
@@ -1244,7 +1266,8 @@ export function lifecycleMonth(w: World): void {
     if (!f) continue;
     // 몫이 비어 있을수록 두각을 나타내는 이가 잦다. 몫이 찼으면 나오지 않는다
     const r = fill(f.id, s.race);
-    let p = s.pop / 45000;
+    // 수백 년을 사는 겨레는 한 번 이름을 얻으면 오래 남으니 덜 나온다
+    let p = s.pop / 45000 * (RACES[s.race].lifespan[0] > 300 ? 0.5 : 1);
     if (r < 0.5) p *= 6; else if (r < 1) p *= 3; else p = 0;
     if (crowd > 1100) p = 0;
     if (rng.chance(p)) {

@@ -26,6 +26,15 @@ export interface Stats {
 export const STAT_NAMES: Record<keyof Stats, string> = {
   might: '무력', intellect: '지력', magic: '마력', command: '통솔', charisma: '매력', health: '건강',
 };
+/** 능력치가 하는 일 (화면의 도움말) */
+export const STAT_HELP: Record<keyof Stats, string> = {
+  might: '싸움의 힘. 결투·토벌·사냥의 성패, 무력 판정',
+  intellect: '배움과 꾀. 학문·연금술·흥정, 지력 판정',
+  magic: '마나를 다루는 힘. 결투의 힘(무력의 8할 무게), 마법사·드루이드·주술사·사령술사·연금술사의 자질, 지휘관·영주로서 전장의 불벼락과 보호막',
+  command: '사람을 이끄는 힘. 군대·주둔지 지휘, 영주의 방어, 반란과 즉위',
+  charisma: '사람을 끄는 힘. 혼담·연회·설교, 군주 추대',
+  health: '몸의 상태. 낮으면 병과 부상으로 쉽게 쓰러진다',
+};
 
 export type Role = '평민' | '백수' | '전사' | '기사' | '마법사' | '학자' | '상인' | '성직자' | '사냥꾼' | '장인' | '모험가' | '도적' | '음유시인'
   | '농부' | '광부' | '대장장이' | '치유사' | '연금술사' | '선원'

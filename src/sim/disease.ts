@@ -138,13 +138,15 @@ export function diseaseMonth(w: World): void {
     const d = w.diseases[s.disease!];
     if (!d) continue;
     d.toll = (d.toll ?? 0) + s.pop * d.mortality;
+    // 대역병은 더 멀리 번진다
+    const reach = d.great && d.epidemic ? 34 : 22;
     for (const o of w.settlements) {
       if (o === s || o.l !== s.l) continue;
       const r = dist(o, s);
-      if (r > 22 || !susceptible(w, o, d)) continue;
+      if (r > reach || !susceptible(w, o, d)) continue;
       // 사람이 많은 곳일수록 잘 번진다
       const dense = 0.4 + Math.min(1.6, o.pop / 1500);
-      if (rng.chance(d.spread * (1 - r / 25) * dense)) {
+      if (rng.chance(d.spread * (1 - r / (reach + 3)) * dense)) {
         infect(w, o, d);
         if (rng.chance(d.great ? 0.15 : 0.4)) addNews(w, `'${d.name}'이(가) ${s.name}에서 ${o.name}까지 번졌다.`, 2, 'nature', { pos: o, facs: [o.faction] });
       }
@@ -162,7 +164,27 @@ export function diseaseMonth(w: World): void {
     if (d.great) {
       if (!d.epidemic && n >= EPIDEMIC_AT) {
         d.epidemic = true;
-        addNews(w, `'${d.name}'이(가) ${n}곳의 고을을 덮쳐 대역병이 되었다. 길마다 수레에 실린 주검이 줄을 이었다.`, 4, 'doom');
+        // 대역병이 되는 순간: 피난민과 상인을 따라 한꺼번에 사방으로 터져 나간다
+        const sickNow = w.settlements.filter(s => s.alive && s.disease === d.id && s.plague > 0);
+        let burst = 0;
+        for (const o of w.settlements) {
+          if (!susceptible(w, o, d) || !sickNow.some(s => s.l === o.l && dist(s, o) <= 40)) continue;
+          if (rng.chance(0.45) && infect(w, o, d)) burst++;
+        }
+        addNews(w, `'${d.name}'이(가) ${n}곳의 고을을 덮쳐 대역병이 되었다. 피난민의 행렬을 따라 병이 사방으로 터져 나가, 한 달 사이 ${burst}곳이 더 쓰러졌다. 길마다 수레에 실린 주검이 줄을 이었다.`, 4, 'doom');
+      }
+      // 대역병은 길을 따라 먼 곳까지 건너뛴다: 교역로의 상대 도성, 층을 잇는 통로 너머
+      if (d.epidemic && n > 0 && rng.chance(0.25)) {
+        const sickNow = w.settlements.filter(s => s.alive && s.disease === d.id && s.plague > 0);
+        const from = rng.pick(sickNow);
+        const f = w.factions[from.faction];
+        const far: Settlement[] = [];
+        for (const t of f?.treaties ?? []) { const cap = w.settlements[w.factions[t.with]?.capital ?? -1]; if (cap) far.push(cap); }
+        for (const p of w.portals) if (p.open && p.a.l !== p.b.l) for (const [a, b] of [[p.a, p.b], [p.b, p.a]]) {
+          if (a.l === from.l && dist(a, from) <= 15) far.push(...w.settlements.filter(o => o.alive && o.l === b.l && dist(o, b) <= 15));
+        }
+        const to = rng.pick(far.filter(o => susceptible(w, o, d)).concat([]));
+        if (to && infect(w, to, d) && rng.chance(0.5)) addNews(w, `'${d.name}'이(가) ${to.l !== from.l ? '층을 잇는 통로를 건너' : '교역로를 따라'} 멀리 ${to.name}까지 번졌다.`, 3, 'doom', { pos: to, facs: [to.faction] });
       }
       // 반백 년이 지나 면역이 퍼지면 사라진다
       if (w.t >= (d.until ?? 0)) {

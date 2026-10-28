@@ -2,7 +2,7 @@ import { RACES, POP_RACES } from '../data/races';
 import { storySummary } from '../sim/lifeData7';
 import { STYLE_DESC, expandStyle } from '../sim/territory';
 import { RES_COLORS, RES_NAMES, TERRAIN } from '../data/terrain';
-import { APT_NAMES, STAT_NAMES, TRAIT_NAMES, describeTraits } from '../data/traits';
+import { APT_NAMES, STAT_HELP, STAT_NAMES, TRAIT_NAMES, describeTraits } from '../data/traits';
 import { fixJosa, fmtNum, josa, pct } from '../data/text';
 import type { Character, Faction, NewsItem, Settlement, World } from '../sim/state';
 import { LAYER_INFO, SEASON_NAMES, ageOf, dateStr, seasonOf } from '../sim/state';
@@ -130,10 +130,14 @@ export function inspectChar(w: World, c: Character, secret: boolean): string {
   }
   for (const it of c.items) tags.push(`<span class="chip">${esc(it)}</span>`);
   const where = c.act.kind === 'travel' ? `여행 중 (${{ adventure: '모험', trade: '교역', visit: '방문', hunt: '토벌', return: '귀환', pilgrim: '순례', duel: '결전', flee: '피난', clear: '개간지로', muster: '괴수 토벌 집결지로', quest: '열강의 길' }[c.act.purpose ?? 'visit']})`
-    : c.act.kind === 'clear' ? `${esc(w.settlements[c.act.target ?? -1]?.name ?? '')} 바깥의 땅을 개간하는 중` : c.act.kind === 'army' ? '출정 중' : c.act.kind === 'colonize' ? '이주 행렬 인솔 중' : c.paragon && c.died < 0 ? esc(paragonDoing(w, c)) : c.act.kind === 'caravan' ? '교역 중 (상단 인솔)' : c.act.kind === 'camp' ? '주둔지 지휘' : (c.sleep ?? 0) > 0 ? `잠듦 (${c.sleep}개월)` : '머무는 중';
+    : c.act.kind === 'clear' ? `${esc(w.settlements[c.act.target ?? -1]?.name ?? '')} 바깥의 땅을 개간하는 중` : c.act.kind === 'army' ? '출정 중' : c.act.kind === 'colonize' ? '이주 행렬 인솔 중' : c.paragon && c.died < 0 ? esc(paragonDoing(w, c)) : c.act.kind === 'caravan' ? '교역 중 (상단 인솔)' : c.act.kind === 'camp' ? '주둔지 지휘' : c.act.kind === 'prison' ? '옥에 갇힘' : (c.sleep ?? 0) > 0 ? `잠듦 (${c.sleep}개월)` : '머무는 중';
   const fam: string[] = [];
   if (c.father >= 0) fam.push(`부: ${charLink(w, w.chars[c.father], w.chars[c.father].name)}`);
   if (c.mother >= 0) fam.push(`모: ${charLink(w, w.chars[c.mother], w.chars[c.mother].name)}`);
+  const gp = [c.father, c.mother].flatMap(id => { const p = w.chars[id]; return p ? [p.father, p.mother] : []; }).map(id => w.chars[id]).filter(g => g);
+  if (gp.length) fam.push(`조부모: ${gp.map(g => charLink(w, g, g.name)).join(', ')}`);
+  const sibs = w.chars.filter(o => o.id !== c.id && ((c.father >= 0 && o.father === c.father) || (c.mother >= 0 && o.mother === c.mother)));
+  if (sibs.length) fam.push(`형제: ${sibs.slice(0, 8).map(o => charLink(w, o, o.name)).join(', ')}${sibs.length > 8 ? ` 외 ${sibs.length - 8}명` : ''}`);
   if (c.spouse >= 0) fam.push(`배우자: ${charLink(w, w.chars[c.spouse], w.chars[c.spouse].name)}`);
   if (c.children.length) fam.push(`자녀: ${c.children.map(id => charLink(w, w.chars[id], w.chars[id].name)).join(', ')}`);
   const rels = Object.entries(c.relations).map(([id, v]) => [w.chars[+id], v] as const).filter(([o]) => o)
@@ -163,7 +167,7 @@ export function inspectChar(w: World, c: Character, secret: boolean): string {
       <span>명성 / 명예</span><span>${fmtNum(c.fame)} / ${fmtNum(c.honor)}</span>
     </div>
     <div class="sec">능력</div>
-    ${(Object.keys(STAT_NAMES) as (keyof Character['stats'])[]).map(k => `<div class="trait"><span>${STAT_NAMES[k]}</span>${bar(c.stats[k], 100, k === 'health' ? 'var(--green)' : 'var(--gold)')}<span>${Math.round(c.stats[k])}</span></div>`).join('')}
+    ${(Object.keys(STAT_NAMES) as (keyof Character['stats'])[]).map(k => `<div class="trait" title="${esc(STAT_HELP[k])}"><span>${STAT_NAMES[k]} ⓘ</span>${bar(c.stats[k], 100, k === 'health' ? 'var(--green)' : 'var(--gold)')}<span>${Math.round(c.stats[k])}</span></div>`).join('')}
     <div class="sec">성격</div>
     ${c.traits.map((v, i) => `<div class="trait"><span>${TRAIT_NAMES[i]}</span>${bar(v, 100, '#b39860')}<span>${v}</span></div>`).join('')}
     <div class="sec">자질</div>${apts}
@@ -239,6 +243,7 @@ export function inspectFaction(w: World, f: Faction): string {
       <span>확장 성향</span><span>${(() => { const st = expandStyle(w, f); return `${st} <small class="dim">— ${STYLE_DESC[st]}</small>`; })()}</span>
       <span>동맹</span><span>${(() => { const al = w.alliances.find(a => a.alive && a.members.includes(f.id)); return al ? `${esc(al.name)}${al.leader === f.id ? ' <b style="color:var(--gold)">(수장)</b>' : ''} · 적: ${charLink(w, w.chars[al.enemy])}` : f.flags.includes('dlvassal') ? '<b style="color:var(--red)">마왕군 가신</b>' : '<span class="dim">없음</span>'; })()}</span>
       <span>전쟁 중</span><span>${wars.map(e => facLink(e)).join(', ') || '<span class="dim">평화</span>'}</span>
+      ${w.alliances.some(a => a.alive && a.members.includes(f.id)) ? `<span>연맹</span><span>${w.alliances.filter(a => a.alive && a.members.includes(f.id)).map(a => `<a data-alliance="${a.id}">${esc(a.name)}</a>`).join(', ')}</span>` : ''}
       <span>국경 태세</span><span>${Object.entries(f.posture ?? {}).map(([id, v]) => `${facLink(w.factions[+id])} <small style="color:${v === 'guard' ? 'var(--red)' : 'var(--green)'}">${v === 'guard' ? '경계 강화' : '화친'}</small>`).join('<br>') || '<span class="dim">평상시</span>'}</span>
       <span>영토</span><span>${ss.reduce((a, s) => a + s.tiles.length, 0)}칸</span>
       <span>교역</span><span>${f.treaties.map(t => `${facLink(w.factions[t.with])} <small>(${RES_NAMES[t.give]}→${RES_NAMES[t.get]})</small>`).join('<br>') || '<span class="dim">없음</span>'}</span>
@@ -442,7 +447,7 @@ export function storiesTab(w: World): string {
   const ended = (w.storyBook?.ended ?? []).slice().reverse().slice(0, 15);
   const jump = (p?: { l: number; x: number; y: number }) => p ? ` data-jump="${p.l},${Math.round(p.x)},${Math.round(p.y)}" title="눌러서 그곳으로"` : '';
   return `<p class="dim" style="margin:0 0 6px">지금 세상을 움직이는 큰 이야기들. 무게가 큰 것부터 보인다. 인물이 있는 카드는 누르면 그 인물을 따라가고, 나머지는 그곳으로 간다.</p>
-    <div class="stories">${now.map(s => `<div class="story story-${s.kind}"${s.char !== undefined && w.chars[s.char]?.died < 0 ? ` data-trackchar="${s.char}" title="눌러서 이 인물을 따라가기"` : jump(s.pos)}><b>${storyIcon(s.kind)} ${esc(s.title)}</b><small>${dateStr(w, s.since)}부터</small>${s.lines.map(l => `<div>${esc(l)}</div>`).join('')}</div>`).join('') || '<div class="dim">세상이 고요하다. 큰 이야기가 없다.</div>'}</div>
+    <div class="stories">${now.map(s => `<div class="story story-${s.kind}"${s.char !== undefined && w.chars[s.char]?.died < 0 ? ` data-trackchar="${s.char}" title="눌러서 이 인물을 따라가기"` : s.pos2 && s.pos ? ` data-jump="${s.pos.l},${Math.round(s.pos.x)},${Math.round(s.pos.y)}" data-jump2="${s.pos2.l},${Math.round(s.pos2.x)},${Math.round(s.pos2.y)}" title="누를 때마다 양쪽 전선을 번갈아 본다"` : jump(s.pos)}><b>${storyIcon(s.kind)} ${esc(s.title)}</b><small>${dateStr(w, s.since)}부터</small>${s.lines.map(l => `<div>${esc(l)}</div>`).join('')}</div>`).join('') || '<div class="dim">세상이 고요하다. 큰 이야기가 없다.</div>'}</div>
     ${ended.length ? `<div class="sec">최근에 끝난 이야기</div><div class="log">${ended.map(e => `<div><span class="when">${storyYears(w, e.t0, e.t1)}</span>${storyIcon(e.kind)} <b>${esc(e.title)}</b> — ${esc(e.end)}</div>`).join('')}</div>` : ''}`;
 }
 
@@ -633,6 +638,119 @@ export function inspectHouse(w: World, h: House): string {
     </div>
     <div class="sec">가문의 일대기</div>
     <div class="log">${h.history.map(x => `<div><span class="when">${dateStr(w, x.t)}</span>${linkify(w, x.text)}</div>`).join('')}</div>
-    <div class="sec">식구</div>
-    <div>${members.slice(0, 40).map(m => `${charLink(w, m, m.name)} <small>${m.died >= 0 ? '' : esc(titleOf(w, m))}${h.head === m.id ? ' · 가주' : ''}</small>`).join('<br>')}</div>`;
+    <div class="sec">족보</div>
+    <div class="tree">${familyTree(w, h, members)}</div>`;
+}
+
+/** 가문의 족보: 시조에서 아래로, 부모-자식을 들여 쓰고 배우자를 곁에 적는다 (고인은 †) */
+function familyTree(w: World, h: House, members: Character[]): string {
+  const ids = new Set(members.map(m => m.id));
+  const seen = new Set<number>();
+  let shown = 0;
+  const one = (c: Character, depth: number): string => {
+    if (seen.has(c.id) || shown > 80) return '';
+    seen.add(c.id); shown++;
+    const sp = w.chars[c.spouse];
+    const kids = c.children.map(id => w.chars[id]).filter(k => k && ids.has(k.id)).sort((a, b) => a.born - b.born);
+    const me = `${c.died >= 0 ? '† ' : ''}${charLink(w, c, c.name)} <small>${c.died >= 0 ? `${ageOf(w, c)}세에 떠남` : esc(titleOf(w, c))}${h.head === c.id ? ' · <b>가주</b>' : ''}</small>${sp ? ` <small>⚭ ${charLink(w, sp, sp.name)}</small>` : ''}`;
+    const sub = depth < 7 ? kids.map(k => one(k, depth + 1)).filter(Boolean).join('') : '';
+    return `<li>${me}${sub ? `<ul>${sub}</ul>` : ''}</li>`;
+  };
+  // 뿌리: 시조부터, 그다음 부모가 가문 밖인 식구(시집·장가온 이들의 갈래)
+  const roots = [w.chars[h.founder], ...members.filter(m => !ids.has(m.father) && !ids.has(m.mother)).sort((a, b) => a.born - b.born)].filter((c): c is Character => !!c);
+  const html = roots.map(r => one(r, 0)).filter(Boolean).join('');
+  return `<ul style="margin:0;padding-left:14px">${html}</ul>${members.length > shown ? `<small class="dim">외 ${members.length - shown}명</small>` : ''}`;
+}
+
+const GOAL_NAME: Record<string, string> = { raid: '약탈', conquer: '정복', holywar: '성전', return: '귀환', colonize: '이주', clear: '개간' };
+
+/** 군대 정보창: 누구의 군대이고, 어디서 와서 어디로 가며, 무엇을 하려는가 */
+export function inspectArmy(w: World, a: import('../sim/state').Army): string {
+  const f = w.factions[a.faction];
+  const from = w.settlements[a.home], tgt = w.settlements[a.target];
+  const cmd = w.chars[a.commander];
+  const camp = w.camps?.[a.camp ?? -1];
+  const foe = a.hold !== undefined ? w.armies[a.foe ?? -1] : undefined;
+  const status = !a.alive ? '흩어짐' : foe && foe.alive ? `<b style="color:var(--red)">${esc(w.factions[foe.faction]?.name ?? '적')}의 군대(${Math.round(foe.soldiers)})와 진을 치고 대치 중</b>`
+    : a.toCamp ? `${esc(camp?.name ?? '주둔지')}(으)로 합류하러 가는 중` : a.goal === 'return' ? '고향으로 돌아가는 중' : a.goal === 'clear' || a.goal === 'colonize' ? '새 땅으로 가는 중' : `${tgt ? esc(tgt.name) : '목적지'}(으)로 진군 중`;
+  const why = a.goal === 'colonize' ? '새 땅에 고을을 세우러 간다' : a.goal === 'clear' ? '거친 땅을 일구러 간다' : a.goal === 'raid' ? '곡식과 재물을 빼앗으러 간다'
+    : a.goal === 'holywar' ? '신앙의 이름으로 적을 치러 간다' : a.goal === 'conquer' ? '고을을 빼앗으러 간다' : '싸움을 마치고 돌아간다';
+  return `<div class="ins-h"><span class="swatch" style="background:${f?.color ?? '#888'}"></span>${esc(f?.name ?? '')}의 ${GOAL_NAME[a.goal] ?? ''} ${a.goal === 'colonize' || a.goal === 'clear' ? '행렬' : '군대'}</div>
+    <div class="ins-sub">${fixJosa(status)}</div>
+    <div class="kv">
+      <span>목적</span><span>${why}</span>
+      <span>병력</span><span>${Math.round(a.soldiers)}명 (${RACES[a.race].name})</span>
+      <span>지휘관</span><span>${cmd && cmd.died < 0 ? charLink(w, cmd) : '<span class="dim">없음</span>'}</span>
+      <span>떠나온 곳</span><span>${setLink(from)}</span>
+      <span>노리는 곳</span><span>${tgt ? `${setLink(tgt)} (${facLink(w.factions[tgt.faction])})` : '-'}</span>
+      ${camp ? `<span>소속 주둔지</span><span>${esc(camp.name)}</span>` : ''}
+      <span>길 위에서</span><span>${a.age}개월째</span>
+    </div>`;
+}
+
+/** 토벌대 정보창 */
+export function inspectParty(w: World, p: import('../sim/crusade').Party): string {
+  const e = w.chars[p.target];
+  const ld = w.chars[p.leader];
+  const al = w.alliances[p.alliance];
+  return `<div class="ins-h">⚑ ${esc(p.name)}</div>
+    <div class="ins-sub">${p.done ? '흩어짐' : '행군 중'} · ${dateStr(w, p.t)}에 꾸려짐</div>
+    <div class="kv">
+      <span>목표</span><span>${e ? `${charLink(w, e)}${w.demonLord === e.id ? ' (마왕)' : e.ancient ? ' (고대 용)' : ''} 토벌` : '-'}</span>
+      <span>이끄는 이</span><span>${charLink(w, ld)}</span>
+      <span>대원</span><span>${p.members.map(id => w.chars[id]).filter(c => c).map(c => c.died < 0 ? charLink(w, c) : `<s>${esc(c.name)}</s>`).join(', ')}</span>
+      ${al ? `<span>연맹</span><span><a data-alliance="${al.id}">${esc(al.name)}</a></span>` : ''}
+      ${p.morale !== undefined ? `<span>사기</span><span>${p.morale >= 0 ? '+' : ''}${Math.round(p.morale * 100)}%</span>` : ''}
+    </div>`;
+}
+
+/** 연맹 정보창 */
+export function inspectAlliance(w: World, al: import('../sim/crusade').Alliance): string {
+  const e = w.chars[al.enemy];
+  const lead = w.factions[al.leader];
+  const parties = w.parties.filter(p => !p.done && p.alliance === al.id);
+  return `<div class="ins-h">🛡 ${esc(al.name)}</div>
+    <div class="ins-sub">${al.alive ? '맞서 싸우는 중' : '해산'} · ${dateStr(w, al.t)}에 맺음</div>
+    <div class="kv">
+      <span>맞서는 적</span><span>${e ? charLink(w, e) : '-'}${e && w.demonLord === e.id ? ' (마왕)' : ''}</span>
+      <span>맹주</span><span>${facLink(lead)}</span>
+      <span>회원국</span><span>${al.members.map(id => facLink(w.factions[id])).join(', ')}</span>
+      <span>공격대</span><span>${parties.map(p => `<a data-party="${p.id}">${esc(p.name)}</a>`).join(', ') || '<span class="dim">없음</span>'}</span>
+    </div>`;
+}
+
+/** 바다 괴수 정보창 */
+export function inspectBeast(w: World, b: import('../sim/sea').SeaBeast): string {
+  const tgt = w.settlements[b.target];
+  const mode = { approach: '항구로 다가오는 중', ashore: '해안을 덮치는 중', retreat: '상처 입고 달아나는 중', rest: '깊은 바다에서 쉬는 중' }[b.mode ?? 'approach'];
+  return `<div class="ins-h">🐙 ${esc(b.name)}</div>
+    <div class="ins-sub">${b.alive ? mode : '쓰러짐'}${b.abyss ? ' · 심연의 군주가 토해 낸 권속' : ''}</div>
+    <div class="kv">
+      <span>체력</span><span>${Math.max(0, Math.round(b.hp))}/${b.maxHp}</span>
+      <span>힘</span><span>${b.power}</span>
+      <span>노리는 곳</span><span>${tgt ? setLink(tgt) : '-'}</span>
+      <span>맞서는 나라</span><span>${b.allies.map(id => facLink(w.factions[id])).join(', ') || '<span class="dim">없음</span>'}</span>
+    </div>
+    <p class="dim">해안을 덮치면 고을이 무너지고 배가 뜨지 못한다. 가까운 나라들이 싸울 이들을 해안에 불러 모아 맞선다.</p>`;
+}
+
+/** 심연의 군주 정보창 (촉수를 누르면) */
+export function inspectLeviathan(w: World, ti: number): string {
+  const V = w.sea.leviathan;
+  if (!V) return '';
+  const t = V.tentacles[ti];
+  const alive = V.tentacles.filter(x => x.alive).length;
+  const spawn = w.sea.beasts.filter(b => b.alive && b.abyss);
+  const lead = w.factions[V.leader];
+  return `<div class="ins-h">♆ ${esc(V.name)}</div>
+    <div class="ins-sub">${V.active ? `${Math.floor((w.t - V.t) / 12)}년째 깨어 있다` : '심연으로 가라앉았다'} · 두 번째 봉인 '심해의 분노'</div>
+    ${V.cause ? `<p><i>${esc(V.cause)}</i></p>` : ''}
+    <div class="kv">
+      ${t ? `<span>이 촉수</span><span>체력 ${Math.max(0, Math.round(t.hp))}/${TENTACLE_HP}${t.alive ? '' : ' (베어짐)'}</span>` : ''}
+      <span>남은 촉수</span><span>${alive}/${V.tentacles.length} <small>(절반 넘게 베면 심연으로 돌아간다)</small></span>
+      <span>권속</span><span>${spawn.map(b => esc(b.name)).join(', ') || '<span class="dim">없음</span>'}</span>
+      <span>토벌 연맹</span><span>${lead ? `맹주 ${facLink(lead)} · ` : ''}${V.alliance.map(id => facLink(w.factions[id])).join(', ') || '<span class="dim">아직 없음</span>'}</span>
+      ${V.by !== undefined && w.chars[V.by] ? `<span>깨운 자</span><span>${charLink(w, w.chars[V.by])}</span>` : ''}
+    </div>
+    <p class="dim">촉수는 사람 냄새를 따라 해안을 미끄러지며 가까운 고을을 내리치고, 권속을 토해 내 항구를 덮친다.</p>`;
 }

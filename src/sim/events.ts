@@ -535,7 +535,7 @@ ev({
       o.alive = false; o.fell = w.t;
     }
     addNews(w, `와아아아! ${ld ? ld.name + '의 ' : ''}${f.name}이(가) 대침공을 선언하였다.${absorb.length ? ` ${absorb.slice(0, 2).map(o => o.name).join(', ')}이(가) 깃발 아래 합류하였다.` : ''}`, 4, 'war', { facs: [f.id], chars: ld ? [ld.id] : [] });
-    for (const o of aliveFactions(w)) if (o !== f && (isNeighbor(w, f, o) || isNeighbor(w, o, f)) && facRel(f, o.id) < 0 && w.rngSim.chance(0.6)) declareWar(w, f, o, true);
+    for (const o of aliveFactions(w)) if (o !== f && (isNeighbor(w, f, o) || isNeighbor(w, o, f)) && facRel(f, o.id) < -25 && w.rngSim.chance(0.6)) declareWar(w, f, o, true);
   },
   forecast: (w, f: Faction) => ({ text: `${f.name}의 대침공`, imp: 4, cat: 'war' }),
 });

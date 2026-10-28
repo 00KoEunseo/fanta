@@ -1,6 +1,6 @@
 import { RACES, type RaceKey } from '../data/races';
 import { WORLD_LIFE } from './lifeData11';
-import { AFTERMATH, CHILD2, PRISON, TRAVEL2, playerCoupFailed } from './lifeData12';
+import { AFTERMATH, CHILD2, CRAFT, DESTINY, PRISON, TRAVEL2, TRIP, playerCoupFailed } from './lifeData12';
 import { knows, knowsRealm } from './contact';
 import { makeName } from '../data/names';
 import { ADVENTURER_TIRED, JOB_SEARCH, buildPrompt, makeCtx, nearDeath, resolveLife, type LifeEv } from './life';
@@ -456,12 +456,14 @@ LIFE.push({
     return {
       eventId: 'child_born', title: '탄생', data: { k: kid.id, n0: names[0], n1: names[1], n2: names[2] },
       text: `${c.name}의 ${kid.sex === 'M' ? '아들' : '딸'}이 태어났다! 이름을 무엇으로 지을까?`,
-      choices: names.map((n, i) => ok('n' + i, n, '')),
+      choices: [...names.map((n, i) => ok('n' + i, n, '')), { ...ok('own', '직접 짓는다', '마음에 둔 이름을 적는다'), input: '아이 이름' }],
     };
   },
   resolve: (w, c, ch, d) => {
     const kid = w.chars[+d.k];
-    kid.name = String(d[ch]);
+    // 직접 지은 이름: 앞뒤 공백을 걷고 열두 자까지
+    const own = ch.startsWith('own:') ? ch.slice(4).replace(/[<>"'&]/g, '').trim().slice(0, 12) : '';
+    kid.name = own || String(d[ch] ?? d.n0);
     c.mood = clamp(c.mood + 20);
     return `아이의 이름을 ${kid.name}(으)로 지었다.`;
   },
@@ -643,9 +645,10 @@ export function playerTick(w: World): void {
         && (a.faction === dlf || w.factions[a.faction]?.flags.includes('dlvassal')) && a.l === home.l && dist(a, home) < 25)) markPeril(w, 'dlarmy', home);
     }
     // 세상의 재앙에 휘말렸다
-    for (const ev of [...AFTERMATH, ...PERIL, ...DL_PERIL]) {
+    for (const ev of [...AFTERMATH, ...TRIP, ...DESTINY, ...PERIL, ...DL_PERIL]) {
       const last = P.lastEvents[ev.id];
       if (!fitsLife(w, c, ev.id)) continue;
+      if (ev.once && last !== undefined) continue;
       // 같은 재난을 거듭 겪으면 다시 묻기까지 오래 걸린다 (해안 재난이 한 생애에 수십 번 되풀이되지 않도록)
       if (last !== undefined && w.t - last < cdFor(ev.id, ev.cd ?? 6)) continue;
       if (!ev.c(x)) continue;
@@ -739,7 +742,7 @@ export function playerTick(w: World): void {
 }
 
 const TRAVEL_ALL: LifeEv[] = [...TRAVEL_EV, ...TRAVEL2];
-const POOL: LifeEv[] = [...CHILD, ...CHILD2, ...ROMANCE, ...TRAIT, ...RACIAL, ...JOBS, ...POWER, ...GUARDIAN, ...DRAGON,
+const POOL: LifeEv[] = [...CHILD, ...CHILD2, ...CRAFT, ...ROMANCE, ...TRAIT, ...RACIAL, ...JOBS, ...POWER, ...GUARDIAN, ...DRAGON,
   ...WORKS_EV, ...RENOWN, ...ARTFATE, ...GOVPATH, ...NEWJOBS, ...GUARDIAN2, ...ECON, ...SLAVE, ...TOWER, ...SEA_START, ...ALLIANCE_EV, ...STORY.filter(e => !STORY_FOLLOW.has(e.id)), ...CAREER, ...HOUSE, JOB_OFFER[1], ...ROYAL, ...RULE, ...ARCS, ...WORLD_LIFE.filter(e => e.id !== 'wl_contact' && e.id !== 'wl_camp_night')];
 const POOL_HUMAN: LifeEv[] = POOL.filter(e => !DRAGON.includes(e));
 /** 돈벌이·출세와 무관한 성역의 수호자에게 어울리는 것들 */
@@ -770,7 +773,7 @@ function fitsLife(w: World, c: Character, id: string): boolean {
   if (RACES[c.race].needs[0] === 0 && UNDEAD_SKIP.has(id)) return false;
   return true;
 }
-const POOL_MAP = new Map<string, LifeEv>([...POOL, ...SEA, ...STORY, ...PERIL, ...MILESTONES, ...JOB_OFFER, ...INVITES, ...PARTY_EV, ...ARMY_EV, ...TRAVEL_EV, ...TRAVEL2, ...PRISON, ...AFTERMATH, ...CARE, ...DL_PERIL, ...WORLD_LIFE, JOB_SEARCH, ADVENTURER_TIRED].map(e => [e.id, e]));
+const POOL_MAP = new Map<string, LifeEv>([...POOL, ...SEA, ...STORY, ...PERIL, ...MILESTONES, ...JOB_OFFER, ...INVITES, ...PARTY_EV, ...ARMY_EV, ...TRAVEL_EV, ...TRAVEL2, ...PRISON, ...AFTERMATH, ...TRIP, ...DESTINY, ...CARE, ...DL_PERIL, ...WORLD_LIFE, JOB_SEARCH, ADVENTURER_TIRED].map(e => [e.id, e]));
 export const LIFE_EVENT_COUNT = () => POOL.length + LIFE.length + 2;
 
 export function resolvePlayer(w: World, choiceId: string): string {
@@ -780,7 +783,7 @@ export function resolvePlayer(w: World, choiceId: string): string {
   const title = P.prompt.title;
   const data = P.prompt.data;
   const id = P.prompt.eventId;
-  const chosen = P.prompt.choices.find(ch => ch.id === choiceId)?.label ?? '';
+  const chosen = P.prompt.choices.find(ch => ch.id === choiceId || choiceId.startsWith(ch.id + ':'))?.label ?? '';
   P.prompt = null;
   P.flags ??= {};
   P.flags.lastResolve = w.t;

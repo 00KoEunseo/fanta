@@ -78,7 +78,8 @@ function armyPower(w: World, a: Army): number {
   const f = w.factions[a.faction];
   const c = w.chars[a.commander];
   let p = a.soldiers * R.might;
-  if (c && c.died < 0) p *= 1 + c.stats.command / 140 + (c.awakened.includes('hero') ? 0.3 : 0) + (w.demonLord === c.id ? 0.8 : 0);
+  // 지휘관의 통솔이 군세를 이끌고, 마력은 불벼락과 보호막으로 전장을 바꾼다
+  if (c && c.died < 0) p *= 1 + c.stats.command / 140 + Math.max(0, c.stats.magic - 40) / 250 + (c.awakened.includes('hero') ? 0.3 : 0) + (w.demonLord === c.id ? 0.8 : 0);
   if (f?.flags.includes('knights')) p *= 1.15;
   if (f?.flags.includes('waaagh')) p *= 1.25;
   if (f?.flags.includes('ancient_magic')) p *= 1.2;
@@ -94,7 +95,7 @@ export function garrison(w: World, s: Settlement): number {
   const isCap = f && f.capital === s.id;
   let d = s.pop * 0.2 * R.might * (isCap ? 1.5 : 1) * (1 + s.dev / 70) * (1 + s.tier * 0.25) * (0.7 + 0.6 * Math.min(1, s.stock[ORE] / (s.pop * 0.2 + 1)));
   const g = w.chars[s.governor];
-  if (g && g.died < 0) d *= 1 + g.stats.command / 200;
+  if (g && g.died < 0) d *= 1 + g.stats.command / 200 + Math.max(0, g.stats.magic - 40) / 300;
   if (f?.flags.some(x => x.startsWith('patron:'))) {
     const dragon = w.chars[+f.flags.find(x => x.startsWith('patron:'))!.split(':')[1]];
     if (dragon && dragon.died < 0) d += 300;

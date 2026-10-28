@@ -260,6 +260,45 @@ export function attemptCoup(w: World, c: Character): 'won' | 'caught' | 'other' 
   return 'other';
 }
 
+/** 해마다: 사이는 시간이 흐르면 겨레끼리의 본래 정(情) 쪽으로 조금씩 돌아간다 (원한도 우정도 영원하지 않다) */
+function settleRelations(w: World, f: Faction): void {
+  for (const k of Object.keys(f.relations)) {
+    const o = w.factions[+k];
+    if (!o || !o.alive) continue;
+    const base = raceAffinity(f.race, o.race) * 0.3;
+    const r = f.relations[o.id];
+    // 싸우는 동안에는 미움이 식지 않는다
+    if (f.wars[o.id] !== undefined && r < base) continue;
+    f.relations[o.id] = r + (base - r) * 0.035;
+  }
+}
+
+/** 해마다: 야심 많고 의리 없는 군주는 웃으며 손잡던 이웃의 등에 칼을 꽂는다 */
+function backstab(w: World, f: Faction, nb: Faction[]): void {
+  const rng = w.rngSim;
+  const ld = leaderOf(w, f);
+  if (!ld || ld.isPlayer || Object.keys(f.wars).length > 1 || f.race === 'angel') return;
+  const t = ld.traits;
+  const treachery = (t[AMBITION] - 55) / 45 + (40 - t[LOYALTY]) / 60 + (40 - t[COMPASSION]) / 80 + (ld.apt[APT_TRAITOR] - 50) / 100;
+  if (treachery <= 0.1) return;
+  // 노리는 상대: 국경을 맞댔거나 가까운 이웃, 그리고 교역으로 손잡은 나라
+  const cands = w.factions.filter(o => o !== f && o.alive && (nb.includes(o) || isNeighbor(w, f, o) || f.treaties.some(x => x.with === o.id)));
+  const prey = cands.filter(o => o.alive && !RACES[o.race].noPop && ((f.relations[o.id] ?? 0) > 0 || f.treaties.some(x => x.with === o.id)) && f.wars[o.id] === undefined && f.military > o.military * 1.1 && (o.truce[f.id] ?? -1) <= w.t
+    && !w.alliances.some(a => a.alive && a.members.includes(f.id) && a.members.includes(o.id)))
+    .sort((a, b) => a.military - b.military)[0];
+  if (!prey || !rng.chance(Math.min(0.12, 0.05 * treachery))) return;
+  const was = Math.round(f.relations[prey.id] ?? 0);
+  declareWar(w, f, prey, true);
+  f.relations[prey.id] = -70; prey.relations[f.id] = -90;
+  aggrieve(w, prey, f, `${f.name}의 배신`);
+  // 이웃들도 그 나라를 믿지 않게 된다
+  for (const o of nb) if (o !== prey) addFacRel(w, f, o, -10);
+  const how = [`어제의 맹세가 무색하게`, `잔치에서 술잔을 나누던 사신이 돌아가기도 전에`, `국경을 지키던 수비대가 한밤에 칼끝을 돌려`][(w.t + f.id) % 3];
+  addNews(w, `${how} ${f.name}의 ${ld.name}이(가) 우방이던 ${prey.name}의 등에 칼을 꽂았다. (사이 ${was} → 전쟁)`, 4, 'war', { facs: [f.id, prey.id], chars: [ld.id] });
+  charLog(w, ld, `우방 ${prey.name}을(를) 배신하고 전쟁을 일으켰다.`, 4);
+  launchAttack(w, f, prey, 'conquer');
+}
+
 /** 너무 넓어진 나라: 수도에서 먼 고을(다른 겨레이거나 민심이 흉흉한 곳)이 영주를 앞세워 떨어져 나간다 (해마다) */
 function overstretch(w: World, f: Faction): void {
   const n = f.settlements.length;
@@ -602,7 +641,8 @@ export function factionMonth(w: World, f: Faction): void {
         if (r === 'nopath' && caravanMaster(w, f, a)) { a.stock[t.give] -= shipment; b.stock[t.give] += shipment; }
       }
     }
-    f.relations[o.id] = clamp((f.relations[o.id] ?? 0) + 0.15, -100, 100);
+    // 교역의 정은 쌓일수록 더디게 쌓인다
+    f.relations[o.id] = clamp((f.relations[o.id] ?? 0) + 0.15 * Math.max(0, 1 - (f.relations[o.id] ?? 0) / 90), -100, 100);
   }
   // 길이 끊긴 교역은 깨진다
   for (const t of f.treaties.filter(t => t.since < 0)) {
@@ -619,6 +659,8 @@ export function factionMonth(w: World, f: Faction): void {
   if (w.t % 12 === f.id % 12) {
     const nb = borderNeighbors(w, f); updatePosture(w, f, nb); borderFriction(w, f, nb);
     overstretch(w, f);
+    settleRelations(w, f);
+    backstab(w, f, nb);
   }
 
   // 식량 위기 표시

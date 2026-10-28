@@ -140,17 +140,25 @@ export function choiceModal(w: World, onChoose: (id: string) => string, onDone: 
     <h2>${esc(pr.title)}</h2>
     <div class="dim">${dateStr(w)} · ${esc(c.name)} (${Math.floor((w.t - c.born) / 12)}세)</div>
     <div class="story">${esc(pr.text)}</div>
-    <div class="choices">${pr.choices.map(ch => `<button class="choice" data-ch="${esc(ch.id)}">
+    <div class="choices">${pr.choices.map(ch => ch.input ? `<div class="choice" style="display:flex;gap:6px;align-items:center"><b>${esc(ch.label)}</b><input class="ch-input" data-for="${esc(ch.id)}" maxlength="12" placeholder="${esc(ch.input)}" style="flex:1"><button class="mini ch-input-ok" data-ch="${esc(ch.id)}">정하기</button></div>` : `<button class="choice" data-ch="${esc(ch.id)}">
       ${ch.chance !== undefined ? `<span class="pc">${Math.round(ch.chance * 100)}%</span>` : ''}<b>${esc(ch.label)}</b><small>${esc(ch.desc)}</small>${ch.preview ? `<small class="pv">${ch.failPreview !== undefined ? '성공: ' : ''}${esc(ch.preview)}</small>` : ''}${ch.failPreview ? `<small class="pv bad">실패: ${esc(ch.failPreview)}</small>` : ''}</button>`).join('')}</div>
   `, false);
-  m.querySelectorAll<HTMLButtonElement>('.choice').forEach(b => b.addEventListener('click', () => {
-    const result = onChoose(b.dataset.ch!);
+  const pick = (id: string) => {
+    const result = onChoose(id);
     const [body, diff] = result.split(' 【변화】');
     m.innerHTML = `<h2>${esc(pr.title)}</h2><div class="story">${esc(body)}</div>${diff ? `<div class="diff">변화: ${esc(diff.trim())}</div>` : ''}<div class="row" style="justify-content:flex-end"><button id="c-ok" class="accent">계속</button></div>`;
     const ok = m.querySelector('#c-ok') as HTMLButtonElement;
     ok.focus();
     ok.addEventListener('click', () => { closeModal(); onDone(); });
-  }));
+  };
+  m.querySelectorAll<HTMLButtonElement>('button.choice').forEach(b => b.addEventListener('click', () => pick(b.dataset.ch!)));
+  // 직접 적는 선택지: 글을 적고 '정하기'(또는 Enter)
+  m.querySelectorAll<HTMLButtonElement>('.ch-input-ok').forEach(b => {
+    const inp = m.querySelector<HTMLInputElement>(`.ch-input[data-for="${b.dataset.ch}"]`)!;
+    const go = () => { const v = inp.value.trim(); if (!v) { inp.focus(); return; } pick(`${b.dataset.ch}:${v}`); };
+    b.addEventListener('click', go);
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') go(); e.stopPropagation(); });
+  });
 }
 
 export function deathModal(w: World, h: { onHeir: () => void; onWatch: () => void; onReborn: () => void }): void {

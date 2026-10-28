@@ -58,7 +58,8 @@ function unlockAchv(id: string, save: boolean) {
 const SPEEDS = [20000, 10000, 5000, 2000];
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
-type Inspect = { kind: 'none' } | { kind: 'char'; id: number } | { kind: 'set'; id: number } | { kind: 'fac'; id: number } | { kind: 'house'; id: number } | { kind: 'caravan'; id: number } | { kind: 'camp'; id: number } | { kind: 'tile'; l: number; x: number; y: number };
+type Inspect = { kind: 'none' } | { kind: 'char'; id: number } | { kind: 'set'; id: number } | { kind: 'fac'; id: number } | { kind: 'house'; id: number } | { kind: 'caravan'; id: number } | { kind: 'camp'; id: number } | { kind: 'tile'; l: number; x: number; y: number }
+  | { kind: 'army'; id: number } | { kind: 'party'; id: number } | { kind: 'alliance'; id: number } | { kind: 'beast'; id: number } | { kind: 'tentacle'; id: number };
 
 const S = {
   w: null as World | null,
@@ -72,6 +73,7 @@ const S = {
   peopleQ: '',
   peopleFilter: 'all',
   inspect: { kind: 'none' } as Inspect,
+  jumpFlip: {} as Record<string, boolean>,
   track: -1,
   skipping: false,
   skipStart: 0,
@@ -343,7 +345,20 @@ function updateInspect() {
   } else if (I.kind === 'caravan') {
     const k = w.caravans?.[I.id];
     if (k) { html = P.inspectCaravan(w, k); actions = k.alive ? '<button class="mini" id="ins-goto">위치로</button>' : ''; }
-  } else if (I.kind === 'tile') html = P.inspectTile(w, I.l, I.x, I.y);
+  } else if (I.kind === 'army') {
+    const a = w.armies[I.id];
+    if (a) { html = P.inspectArmy(w, a); actions = a.alive ? '<button class="mini" id="ins-goto">위치로</button>' : ''; }
+  } else if (I.kind === 'party') {
+    const p = w.parties[I.id];
+    if (p) html = P.inspectParty(w, p);
+  } else if (I.kind === 'alliance') {
+    const al = w.alliances[I.id];
+    if (al) html = P.inspectAlliance(w, al);
+  } else if (I.kind === 'beast') {
+    const b = w.sea.beasts[I.id];
+    if (b) { html = P.inspectBeast(w, b); actions = b.alive ? '<button class="mini" id="ins-goto">위치로</button>' : ''; }
+  } else if (I.kind === 'tentacle') html = P.inspectLeviathan(w, I.id);
+  else if (I.kind === 'tile') html = P.inspectTile(w, I.l, I.x, I.y);
   box.innerHTML = html;
   $('inspect-actions').innerHTML = actions;
   box.scrollTop = top;
@@ -360,6 +375,8 @@ function updateInspect() {
     if (I.kind === 'house') { const s = w.settlements[w.houses[I.id].seat]; if (s) jumpTo(s); }
     if (I.kind === 'caravan') { const k = w.caravans?.[I.id]; if (k) jumpTo(k); }
     if (I.kind === 'camp') { const k = w.camps?.[I.id]; if (k) jumpTo(k); }
+    if (I.kind === 'army') { const a = w.armies[I.id]; if (a) jumpTo(a); }
+    if (I.kind === 'beast') { const b = w.sea.beasts[I.id]; if (b) jumpTo({ l: 2, x: b.x, y: b.y }); }
   });
 }
 
@@ -473,8 +490,7 @@ function focusSeal(i: number) {
       if (renderer.cam.l !== 2) { renderer.cam.l = 2; updateLayerTabs(); }
       renderer.cam.x = w.layers[2].w / 2; renderer.cam.y = w.layers[2].h / 2;
       renderer.cam.s = renderer.minScale();
-      S.inspect = { kind: 'tile', l: 2, x: V.eye.x, y: V.eye.y };
-      renderer.selectedTile = { l: 2, x: V.eye.x, y: V.eye.y };
+      S.inspect = { kind: 'tentacle', id: -1 };
       updateInspect();
       M.toast(`${V.name} — 남은 촉수 ${V.tentacles.filter(t => t.alive).length}/${V.tentacles.length}`);
       return;
@@ -534,6 +550,22 @@ function clickMap(sx: number, sy: number) {
     renderer.selectedCaravan = k.id; renderer.selectedChar = -1; renderer.selectedSettlement = -1; renderer.selectedTile = null;
     updateInspect();
     return;
+  }
+  // 군대, 토벌대, 바다 괴수, 심연의 촉수
+  const pick = (kind: 'army' | 'party' | 'beast' | 'tentacle', id: number) => { S.inspect = { kind, id }; renderer.selectedChar = -1; renderer.selectedSettlement = -1; renderer.selectedTile = null; updateInspect(); };
+  const near = (p: { x: number; y: number }) => Math.abs(p.x - tx) <= 1 && Math.abs(p.y - ty) <= 1;
+  if (renderer.showArmies) {
+    const a = w.armies.find(a => a.alive && a.l === l && near(a));
+    if (a) { pick('army', a.id); return; }
+  }
+  const pt = w.parties.find(p => !p.done && w.chars[p.leader]?.l === l && near(w.chars[p.leader]));
+  if (pt) { pick('party', pt.id); return; }
+  if (l === 2) {
+    const b = w.sea.beasts.find(b => b.alive && near(b));
+    if (b) { pick('beast', b.id); return; }
+    const V = w.sea.leviathan;
+    const ti = V?.active ? V.tentacles.findIndex(t => t.alive && Math.abs(t.x - tx) <= 2 && Math.abs(t.y - ty) <= 2) : -1;
+    if (ti >= 0) { pick('tentacle', ti); return; }
   }
   renderer.selectedCaravan = -1;
   S.inspect = { kind: 'tile', l, x: tx, y: ty };
@@ -665,14 +697,19 @@ function bindInput() {
   document.addEventListener('click', e => {
     const w = S.w;
     if (!w) return;
-    const el = (e.target as HTMLElement).closest<HTMLElement>('[data-char],[data-set],[data-fac],[data-news],[data-portal],[data-logcat],[data-pfilter],[data-layer],[data-art],[data-house],[data-seal],[data-jump],[data-lifeall],[data-trackchar]');
+    const el = (e.target as HTMLElement).closest<HTMLElement>('[data-char],[data-set],[data-fac],[data-news],[data-portal],[data-logcat],[data-pfilter],[data-layer],[data-art],[data-house],[data-seal],[data-jump],[data-lifeall],[data-trackchar],[data-alliance],[data-party]');
     if (!el) return;
     const d = el.dataset;
     if (d.seal !== undefined) focusSeal(+d.seal);
+    else if (d.alliance !== undefined) { S.inspect = { kind: 'alliance', id: +d.alliance }; updateInspect(); }
+    else if (d.party !== undefined) { S.inspect = { kind: 'party', id: +d.party }; updateInspect(); }
     else if (d.lifeall !== undefined) { S.lifeAll = d.lifeall === '1'; updateBottom(); }
     else if (d.trackchar !== undefined) { selectChar(+d.trackchar); S.track = +d.trackchar; updateInspect(); }
     else if (d.jump !== undefined) {
-      const [l, x, y] = d.jump.split(',').map(Number);
+      // 전쟁 이야기: 누를 때마다 양쪽 진영을 번갈아 본다
+      let spot = d.jump;
+      if (d.jump2 !== undefined) { const k = d.jump + '|' + d.jump2; S.jumpFlip[k] = !S.jumpFlip[k]; if (!S.jumpFlip[k]) spot = d.jump2; }
+      const [l, x, y] = spot.split(',').map(Number);
       jumpTo({ l, x, y });
       const st = w.settlements.find(s => s.alive && s.l === l && s.x === x && s.y === y);
       if (st) selectSettlement(st.id, false);

@@ -117,6 +117,12 @@ export function towerMonth(w: World): void {
       tw.demon = true;
       tw.name = `마왕탑 (옛 ${tw.name})`;
       addNews(w, `마왕 ${dl!.name}이(가) 바벨탑을 손에 넣었다. 탑 꼭대기에 핏빛 깃발이 올랐다. 이제 그것은 마왕탑이다.`, 5, 'doom', { pos: tw, chars: [dl!.id] });
+    } else if (!isDemon && tw.demon) {
+      // 마왕이 쓰러졌거나 탑을 잃었다: 핏빛 깃발이 내려지고 옛 이름을 되찾는다
+      tw.demon = false;
+      const old = tw.name;
+      tw.name = tw.name.replace(/^마왕탑 \(옛 (.*)\)$/, '$1');
+      addNews(w, `${old}의 꼭대기에서 핏빛 깃발이 내려졌다. 탑은 다시 ${tw.name}(이)라 불리게 되었다.`, 3, 'politics', { pos: tw, facs: owner ? [owner.id] : [] });
     }
     // 건설
     if (owner && owner.alive && tw.progress < 200) {
@@ -130,7 +136,8 @@ export function towerMonth(w: World): void {
         cap.stock[STONE] -= 3; cap.stock[WOOD] -= 2; cap.stock[GOLD] -= 1;
         tw.hp = Math.min(100, tw.hp + 0.4);
         const before = tw.progress;
-        tw.progress = Math.min(200, tw.progress + (tw.demon ? 0.9 : 0.6));
+        // 높이 오를수록 더디다: 구름 위(하늘)부터는 바람과 추위에 돌 하나 올리기도 어렵다
+        tw.progress = Math.min(200, tw.progress + (tw.demon ? 0.5 : 0.35) * (tw.progress < 100 ? 1 : 0.35));
         if (before < 100 && tw.progress >= 100) reachSky(w, tw, owner);
         if (before < 200 && tw.progress >= 200) reachHeaven(w, tw, owner);
       }

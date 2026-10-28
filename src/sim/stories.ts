@@ -1,12 +1,13 @@
 // 지금 세상에서 벌어지고 있는 큰 이야기들: 전쟁, 마왕의 치세, 깨어난 고대 용, 대역병, 토벌대, 심연의 군주.
 // 매달 기록부를 갱신해 언제 시작되었는지 기억하고, 끝나면 결말 한 줄을 남긴다. 난수를 쓰지 않는다.
 import { paragonDoing } from './paragon';
-import type { Pos, World } from './state';
+import type { Faction, Pos, Settlement, World } from './state';
+import { settlementsOf } from './helpers';
 import { yearOf } from './state';
 import { fixJosa } from '../data/text';
 
 export type StoryKind = 'war' | 'dl' | 'dragon' | 'plague' | 'party' | 'abyss';
-export interface StoryView { id: string; kind: StoryKind; title: string; since: number; lines: string[]; pos?: Pos; weight: number; /** 이야기의 주인공 (누르면 추적) */ char?: number }
+export interface StoryView { id: string; kind: StoryKind; title: string; since: number; lines: string[]; pos?: Pos; weight: number; /** 이야기의 주인공 (누르면 추적) */ char?: number; /** 다시 누르면 가는 곳 (전쟁의 맞은편) */ pos2?: Pos }
 export interface StoryEnd { id: string; kind: StoryKind; title: string; t0: number; t1: number; end: string }
 export interface StoryBook { open: Record<string, { t: number; title: string; kind: StoryKind }>; ended: StoryEnd[] }
 
@@ -15,6 +16,17 @@ export const storyIcon = (k: StoryKind) => ICON[k];
 
 const yrs = (w: World, t: number) => Math.max(0, Math.floor((w.t - t) / 12));
 const capital = (w: World, fid: number) => { const f = w.factions[fid]; return f ? w.settlements[f.capital] : undefined; };
+
+/** 두 세력이 서로 마주한 고을 한 쌍 (같은 층에서 가장 가까운) */
+function frontPair(w: World, a: Faction, b: Faction): [Settlement | undefined, Settlement | undefined] {
+  let best: [Settlement | undefined, Settlement | undefined] = [undefined, undefined], bd = Infinity;
+  for (const s of settlementsOf(w, a)) for (const o of settlementsOf(w, b)) {
+    if (s.l !== o.l) continue;
+    const d = Math.hypot(s.x - o.x, s.y - o.y);
+    if (d < bd) { bd = d; best = [s, o]; }
+  }
+  return best;
+}
 
 /** 지금 이어지고 있는 이야기들 (기록부의 시작 시점을 쓴다) */
 export function currentStories(w: World): StoryView[] {
@@ -87,7 +99,9 @@ export function currentStories(w: World): StoryView[] {
       const fell = countNews(t0, (text, _c, facs) => facs.includes(a.id) && facs.includes(b.id) && /함락하였다/.test(text));
       const lead = a.military >= b.military ? a : b, other = lead === a ? b : a;
       const ratio = Math.max(a.military, b.military) / Math.max(1, Math.min(a.military, b.military));
-      wars.push({ id, kind: 'war', title: `${a.name}과(와) ${b.name}의 전쟁`, since: t0, weight: 20 + yrs(w, t0) + (a.tier + b.tier) * 5, pos: capital(w, b.id),
+      // 맞닿은 전선: 서로에게 가장 가까운 두 고을 (누를 때마다 한쪽씩)
+      const [fa, fb] = frontPair(w, a, b);
+      wars.push({ id, kind: 'war', title: `${a.name}과(와) ${b.name}의 전쟁`, since: t0, weight: 20 + yrs(w, t0) + (a.tier + b.tier) * 5, pos: fa ?? capital(w, a.id), pos2: fb ?? capital(w, b.id),
         lines: [`${yrs(w, t0) ? `${yrs(w, t0)}년째` : '막 시작된'} 싸움. 함락된 고을 ${fell}곳.`, ratio > 1.5 ? `${lead.name}이(가) ${other.name}을(를) 밀어붙이고 있다.` : '어느 쪽도 물러서지 않는다.'] });
     }
   }
