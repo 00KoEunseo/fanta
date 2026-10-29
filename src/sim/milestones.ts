@@ -44,12 +44,44 @@ export function watchMilestones(w: World): void {
   if (now.head >= 0 && prev.head !== now.head) mark('head');
   if (now.slave && !prev.slave) mark('enslaved');
   if (!now.slave && prev.slave) mark('freed');
+  // 사는 고을의 깃발이 바뀌었는데 '나'는 여전히 옛 나라의 백성이다 (함락·반란·할양·흡수)
+  const home = w.settlements[c.home];
+  const recentFlip = (P.flags.ms_homeflip ?? -99) >= w.t - 12;
+  if (home && home.alive && c.faction >= 0 && home.faction !== c.faction && w.factions[home.faction]?.alive && c.act.kind !== 'prison' && w.factions[c.faction]?.leader !== c.id && c.role !== '노예'
+    && !recentFlip && !perilRecent('fallen') && !perilRecent('fallenAway') && !perilRecent('fall') && (P.flags.exiled ?? -99) < w.t - 3) {
+    const nf = w.factions[home.faction]!;
+    const born = nf.rulers[0]?.from ?? -99;
+    const why = born >= w.t - 3 && /독립|계승 전쟁|반란/.test(nf.rulers[0]?.how ?? '') ? 1 : nf.wars[c.faction] !== undefined ? 2 : 3;
+    mark('homeflip'); P.flags.msOldFaction = c.faction; P.flags.homeFlipWhy = why;
+  }
 }
 
 const fresh = (k: string) => (x: Ctx) => { const t = x.P.flags?.['ms_' + k]; return t !== undefined && x.w.t - t <= 3; };
+const flipWhy = (x: Ctx) => x.P.flags?.homeFlipWhy ?? 3;
+const newFac = (x: Ctx) => x.w.factions[x.home?.faction ?? -1];
 const clear = (k: string) => 'ms_' + k;
 
 export const MILESTONES: LifeEv[] = [
+  { id: 'ms_homeflip', t: '고향의 깃발', cd: 6, c: all(adult, fresh('homeflip'), x => !!x.home && x.home.faction !== x.c.faction),
+    data: x => ({ fo: x.w.factions[x.P.flags?.msOldFaction ?? -1]?.name ?? '옛 나라', fn: newFac(x)?.name ?? '새 나라', nl: x.w.chars[newFac(x)?.leader ?? -1]?.name ?? '새 주인' }),
+    x: x => [
+      '',
+      '{h}이(가) {fo}에 맞서 들고 일어났다. 성문 위에 {fn}의 깃발이 올랐다. 광장에서 {nl}이(가) 외친다. "오늘부터 우리는 누구의 종도 아니다!"',
+      '{h}이(가) {fn}의 손에 떨어졌다. 낯선 병사들이 거리를 지나며 집집마다 문을 두드린다. 당신은 아직 {fo}의 백성이다.',
+      '강화의 값으로, 혹은 큰 나라에 삼켜져, {h}이(가) {fn}에 넘어갔다. 어제까지의 {fo}은(는) 이제 국경 너머에 있다.',
+    ][flipWhy(x)],
+    o: x => {
+      const why = flipWhy(x);
+      const old = x.w.factions[x.P.flags?.msOldFaction ?? -1];
+      const opts = [
+        why === 1 ? o('반란에 가담한다', { r: '{nl}의 깃발 아래 섰다. 새 나라의 첫 백성이 되었다.', fx: 'hf_join', fame: 4, tr: [[1, 4], [4, -4]], unflag: clear('homeflip') })
+          : o('새 주인을 받아들인다', { r: '살아가는 땅이 곧 나라라고 마음먹었다.', fx: 'hf_join', unflag: clear('homeflip') }),
+        o('겉으로만 따른다', { r: '고개는 숙였지만 마음까지 내주지는 않았다.', fx: 'hf_join', tr: [[4, -5]], unflag: clear('homeflip'), seed: ['old_loyalty', '{fo}에 대한 옛 충성'] }),
+      ];
+      if (old && old.alive) opts.push(o(why === 1 ? '반역자들을 피해 옛 나라로 간다' : '옛 나라의 땅으로 떠난다', { r: '', fx: 'ms_go_old', honor: why === 1 ? 4 : 0, unflag: clear('homeflip') }));
+      if (why === 1 && old && old.alive) opts.push(o('옛 나라에 몰래 성문을 열어 줄 날을 노린다', { r: '밤마다 옛 나라의 밀사와 만났다.', fx: 'hf_join', honor: -3, unflag: clear('homeflip'), seed: ['old_loyalty', '{fo}을(를) 위한 밀약'] }, '들키면 목숨이 위험하다', ['luck', 0.75], { r: '밀사와 만나는 것을 들켰다. 매질 끝에 쫓겨났다.', hp: -25, fx: 'ms_go_old', unflag: clear('homeflip') }));
+      return opts;
+    } },
   { id: 'ms_faction', t: '다른 깃발 아래', cd: 12, c: all(adult, fresh('faction')),
     data: x => ({ fo: x.w.factions[x.P.flags?.msOldFaction ?? -1]?.name ?? '옛 나라' }),
     x: '이제 {f}의 백성이 되었다. 어제까지 {fo}의 깃발이 걸렸던 자리에 낯선 깃발이 나부낀다.',
@@ -89,6 +121,11 @@ export const MILESTONES: LifeEv[] = [
 ];
 
 FX_HOOKS.push((x, fx) => {
+  if (fx === 'hf_join') {
+    const s = x.home;
+    if (s && s.alive) { x.c.faction = s.faction; charLog(x.w, x.c, `${x.w.factions[s.faction]?.name ?? '새 나라'}의 백성이 되었다.`, 3); }
+    return '';
+  }
   if (fx !== 'ms_go_old') return null;
   const of = x.w.factions[x.P.flags?.msOldFaction ?? -1];
   const to = of?.alive ? x.w.settlements.filter(s => s.alive && s.faction === of.id).sort((a, b) => Math.hypot(a.x - x.c.x, a.y - x.c.y) - Math.hypot(b.x - x.c.x, b.y - x.c.y))[0] : undefined;

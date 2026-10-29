@@ -8,7 +8,7 @@ import type { Army, Character, Faction, Pos, Settlement, World } from './state';
 import { dist } from './state';
 import { addNews, charLog } from './news';
 import { findPath, posOf } from './path';
-import { settlementsOf } from './helpers';
+import { clamp, settlementsOf } from './helpers';
 import { killChar, relocate } from './characters';
 import { armyAt } from './military';
 
@@ -56,6 +56,40 @@ function frontSpot(w: World, f: Faction, from: Settlement, to: Settlement): Pos 
     best = p;
   }
   return best;
+}
+
+// ───────────── 탄생 모드의 '나': 주둔지의 병사
+
+/** '나'가 지금 근무하는 주둔지 */
+export function playerCamp(w: World): Camp | undefined {
+  const id = w.player?.flags?.campSoldier;
+  return id === undefined ? undefined : campOf(w, id);
+}
+/** '나'를 주둔지에 배치한다 */
+export function stationPlayer(w: World, camp: Camp, why: string): void {
+  const P = w.player;
+  if (!P) return;
+  const c = w.chars[P.charId];
+  if (!c || c.died >= 0) return;
+  P.flags ??= {};
+  P.flags.campSoldier = camp.id;
+  P.flags.campSince ??= w.t;
+  delete P.flags.campDuty;
+  c.act = { kind: 'camp', target: camp.id };
+  c.pl = c.l; c.px = c.x; c.py = c.y; c.l = camp.l; c.x = camp.x; c.y = camp.y;
+  charLog(w, c, `${why} ${camp.name}에 배치되었다.`, 2);
+}
+/** '나'의 근무가 끝난다: 고향으로 (살아 있다면) */
+export function releasePlayer(w: World, text: string, imp = 2): void {
+  const P = w.player;
+  if (!P || P.flags?.campSoldier === undefined) return;
+  delete P.flags.campSoldier; delete P.flags.campSince;
+  const c = w.chars[P.charId];
+  if (!c || c.died >= 0) return;
+  if (c.act.kind === 'camp') c.act = { kind: 'idle' };
+  const h = w.settlements[c.home];
+  if (h && h.alive) relocate(w, c, h);
+  if (text) charLog(w, c, text, imp);
 }
 
 /** 주둔지를 세운다 (이미 가까이에 있으면 그것을 쓴다) */
@@ -141,6 +175,13 @@ function sortie(w: World, camp: Camp, f: Faction, e: Faction): void {
   const a = armyAt(w, f, camp, 'conquer', tgt, n, path, camp.home, lead);
   a.camp = camp.id; a.toCamp = false;
   camp.soldiers -= n;
+  const P = w.player, me = P && w.chars[P.charId];
+  if (me && me.died < 0 && P!.flags?.campSoldier === camp.id && me.act.kind === 'camp') {
+    P!.flags.armyId = a.id; P!.flags.armyStart = a.soldiers;
+    me.act = { kind: 'army', target: a.id };
+    me.l = a.l; me.x = a.x; me.y = a.y;
+    charLog(w, me, `${camp.name}의 군세와 함께 ${tgt.name}(으)로 출격하였다.`, 2);
+  }
   camp.front = tgt.id;
   if (lead) camp.commander = -1;
 }
@@ -180,6 +221,12 @@ export function campsMonth(w: World): void {
         addNews(w, `${e.name}의 군대가 ${f.name}의 ${camp.name}을(를) 짓밟았다. 살아남은 병사들은 흩어졌다.`, 3, 'war', { pos: camp, facs: [f.id, e.id] });
         if (cmd && cmd.died < 0 && rng.chance(0.3)) { cmd.act = { kind: 'idle' }; killChar(w, cmd, `${camp.name} 함락 때 전사`); }
         warScore(w, e, f, 10);
+        // 근무하던 '나'도 휘말린다
+        if (playerCamp(w) === camp) {
+          const me = w.chars[w.player!.charId];
+          if (me && rng.chance(0.25 * clamp(1.3 - (me.stats.might + me.stats.health) / 250, 0.4, 1.3))) { me.act = { kind: 'idle' }; killChar(w, me, `${camp.name} 함락 때 전사`); }
+          else releasePlayer(w, `${camp.name}이(가) 짓밟히던 밤, 무너진 울타리를 넘어 간신히 달아났다.`, 3);
+        }
         breakCamp(w, camp, '');
         continue;
       }
@@ -197,12 +244,23 @@ export function campsMonth(w: World): void {
     const out = w.armies.some(a => a.alive && a.camp === camp.id && !a.toCamp);
     if (!out && camp.soldiers >= 40 && rng.chance(0.25)) sortie(w, camp, f, e);
   }
-  if (list.length > 120) w.camps = list.filter(c => c.alive).map((c, i) => ({ ...c, id: i }));
+  playerCampMonth(w);
+  if (list.length > 120) {
+    // 번호가 바뀐다: '나'의 근무지도 따라 옮긴다
+    const P = w.player, old = P?.flags?.campSoldier, oldDuty = P?.flags?.campDuty;
+    const keep = list.filter(c => c.alive);
+    w.camps = keep.map((c, i) => ({ ...c, id: i }));
+    if (P?.flags && old !== undefined) { const i = keep.findIndex(c => c.id === old); if (i >= 0) P.flags.campSoldier = i; else delete P.flags.campSoldier; }
+    if (P?.flags && oldDuty !== undefined) { const i = keep.findIndex(c => c.id === oldDuty); if (i >= 0) P.flags.campDuty = i; else delete P.flags.campDuty; }
+    const me = P && w.chars[P.charId];
+    if (me && me.act.kind === 'camp' && P!.flags?.campSoldier !== undefined) me.act.target = P!.flags.campSoldier;
+  }
 }
 
 /** 주둔지를 거둔다: 지휘관은 집으로, 병사는 고향 고을로 */
 export function breakCamp(w: World, camp: Camp, news: string): void {
   camp.alive = false;
+  if (playerCamp(w) === undefined && w.player?.flags?.campSoldier === camp.id) releasePlayer(w, `${camp.name}이(가) 거두어져 고향으로 돌아왔다.`);
   const home = w.settlements[camp.home];
   if (home && home.alive && home.faction === camp.faction) home.pop += camp.soldiers;
   camp.soldiers = 0;
@@ -222,3 +280,17 @@ export function returnToCamp(w: World, a: Army): boolean {
 }
 
 export const campCommander = (w: World, c: Character): Camp | undefined => (c.act.kind === 'camp' ? campOf(w, c.act.target) : undefined);
+
+/** '나'의 주둔지 한 달: 소집되어 걸어오던 이는 닿으면 배치되고, 근무 중인 이는 자리를 지킨다 */
+function playerCampMonth(w: World): void {
+  const P = w.player;
+  if (!P || P.dead) return;
+  const c = w.chars[P.charId];
+  if (!c || c.died >= 0) return;
+  const duty = campOf(w, P.flags?.campDuty);
+  if (duty && c.act.kind === 'idle' && c.l === duty.l && dist(c, duty) <= 3) stationPlayer(w, duty, '소집령을 받고');
+  else if (P.flags?.campDuty !== undefined && !duty) delete P.flags.campDuty;
+  const k = playerCamp(w);
+  if (P.flags?.campSoldier !== undefined && !k && c.act.kind === 'camp') releasePlayer(w, '주둔지가 사라져 고향으로 돌아왔다.');
+  if (k && c.act.kind === 'camp') { c.pl = c.l; c.px = c.x; c.py = c.y; c.l = k.l; c.x = k.x; c.y = k.y; }
+}

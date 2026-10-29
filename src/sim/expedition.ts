@@ -7,6 +7,7 @@ import { dist } from './state';
 import { addRel, approxDist, charLabel, clamp, isAdult } from './helpers';
 import { killChar, relocate, resolveAdventure, setPos } from './characters';
 import type { Party } from './crusade';
+import { stationPlayer } from './camps';
 import type { Ctx } from './life';
 
 const pf = (w: World) => { w.player!.flags ??= {}; return w.player!.flags; };
@@ -38,7 +39,10 @@ export function offerArmy(w: World, a: Army): void {
   if (!canJoin(w, c) || c.faction !== a.faction || (a.goal !== 'conquer' && a.goal !== 'holywar')) return;
   const home = w.settlements[c.home];
   const from = w.settlements[a.home];
-  if (!home || !from || (home.id !== from.id && dist(home, from) > 6) || c.l !== from.l || dist(c, from) > 6) return;
+  const enlisted = w.t - (pf(w).enlisted ?? -99) <= 24;
+  const reach = enlisted ? 25 : 6;
+  if (!home || !from || (home.id !== from.id && dist(home, from) > reach) || c.l !== from.l || dist(c, from) > reach) return;
+  delete pf(w).enlisted;
   pf(w).armyInvite = a.id;
 }
 
@@ -57,21 +61,33 @@ export function expeditionMonth(w: World): void {
   }
 }
 
+/** 출정이 끝났다. 주둔지에서 출격했던 '나'는 (살아 있다면) 주둔지로 돌아간다 */
 function armyOutcome(w: World, c: Character, a: Army | undefined) {
+  armyOutcome0(w, c, a);
+  const k = w.camps?.[pf(w).campSoldier ?? -1];
+  if (c.died < 0 && c.act.kind === 'idle' && k && k.alive) stationPlayer(w, k, '살아남아');
+  else if (c.died < 0 && pf(w).campSoldier !== undefined && !(k && k.alive)) delete pf(w).campSoldier;
+}
+
+function armyOutcome0(w: World, c: Character, a: Army | undefined) {
   const F = pf(w);
   const rng = w.rngSim;
   const start = F.armyStart ?? 1;
   const tgt = a ? w.settlements[a.target] : undefined;
   delete F.armyId; delete F.armyStart;
   c.act = { kind: 'idle' };
+  // 주둔지에 합류한 군대: 그 주둔지에 남아 근무한다 (출격하면 함께 나간다)
+  const camp = a?.toCamp ? w.camps?.[a.camp ?? -1] : undefined;
+  if (a && camp && camp.alive) {
+    c.fame += 2;
+    stationPlayer(w, camp, a.goal === 'return' ? '싸움을 마치고 돌아와 다시' : '군세와 함께 닿아');
+    return;
+  }
   const home = w.settlements[c.home];
   if (home && home.alive) relocate(w, c, home);
   if (!a) return;
-  // 주둔지에 합류한 군대: 한 철 보초를 서고 교대해 돌아왔다
   if (a.toCamp) {
-    const camp = w.camps?.[a.camp ?? -1];
-    c.fame += 3; c.stats.command = clamp(c.stats.command + 1);
-    charLog(w, c, `${camp ? camp.name : '주둔지'}에 닿아 한 철 동안 보초를 섰다. 교대 명령을 받고 고향으로 돌아왔다.`, 2);
+    charLog(w, c, '닿고 보니 주둔지는 이미 거두어져 있었다. 고향으로 돌아왔다.', 2);
     return;
   }
   const won = !!tgt && tgt.faction === a.faction;

@@ -9,7 +9,7 @@ const argv: string[] = (globalThis as any).process.argv;
 const N = +(argv[2] ?? 12), off = +(argv[3] ?? 0);
 const RACES_P = ['human', 'elf', 'dwarf', 'orc', 'beast', 'darkelf', 'goblin', 'kobold'];
 const ORIGINS = ['common', 'noble', 'orphan', 'common'];
-const tot = { lives: 0, childPrompts: 0, childYears: 0, adultPrompts: 0, adultYears: 0, travelPrompts: 0, coup: 0, prison: 0, exile: 0, fallenAway: 0, captured: 0, deaths: 0 };
+const tot = { mismatch: 0, homeflip: 0, warcall: 0, stationed: 0, sortie: 0, lives: 0, childPrompts: 0, childYears: 0, adultPrompts: 0, adultYears: 0, travelPrompts: 0, coup: 0, prison: 0, exile: 0, fallenAway: 0, captured: 0, deaths: 0 };
 const childIds = new Set<string>(), travelIds = new Set<string>();
 const allIds = new Map<string, number>();
 for (let k = off; k < off + N; k++) {
@@ -25,8 +25,12 @@ for (let k = off; k < off + N; k++) {
     const P = w.player!;
     const c = w.chars[P.charId];
     if (P.dead || c.died >= 0) { tot.deaths++; console.log(`  죽음 LD-${k} ${c.race} ${ageOf(w, c)}세: ${c.cause} | 마지막: ${c.bio.slice(-3).map(b => b.text).join(' / ')}`); break; }
+    { const h = w.settlements[c.home]; if (h && h.alive && c.faction >= 0 && h.faction !== c.faction && c.act.kind !== 'prison' && c.act.kind !== 'travel') tot.mismatch++; }
+    if (c.act.kind === 'camp') tot.stationed++;
     if (P.prompt) {
       const id = P.prompt.eventId;
+      if (id === 'ms_homeflip') tot.homeflip++;
+      if (id === 'war_call') tot.warcall++;
       allIds.set(id, (allIds.get(id) ?? 0) + 1);
       const age = ageOf(w, c);
       if (age < adult) { tot.childPrompts++; childIds.add(id); } else tot.adultPrompts++;

@@ -569,7 +569,8 @@ export function characterMonth(w: World, c: Character): void {
   // 주둔지를 지키는 중
   if (c.act.kind === 'camp') {
     const k = w.camps?.[c.act.target ?? -1];
-    if (!k || !k.alive || k.commander !== c.id) c.act = { kind: 'idle' };
+    const soldier = c.isPlayer && w.player?.flags?.campSoldier === k?.id;
+    if (!k || !k.alive || (k.commander !== c.id && !soldier)) c.act = { kind: 'idle' };
     return;
   }
   if (c.act.kind === 'caravan') {

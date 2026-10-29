@@ -1,9 +1,9 @@
 import { RACES, type RaceKey } from '../data/races';
 import { WORLD_LIFE } from './lifeData11';
-import { AFTERMATH, CHILD2, CRAFT, DESTINY, PRISON, TRAVEL2, TRIP, playerCoupFailed } from './lifeData12';
+import { AFTERMATH, CHILD2, CRAFT, DESTINY, PRISON, SOLDIER, TRAVEL2, TRIP, playerCoupFailed } from './lifeData12';
 import { knows, knowsRealm } from './contact';
 import { makeName } from '../data/names';
-import { ADVENTURER_TIRED, JOB_SEARCH, buildPrompt, makeCtx, nearDeath, resolveLife, type LifeEv } from './life';
+import { ADVENTURER_TIRED, JOB_SEARCH, applyFx, buildPrompt, makeCtx, nearDeath, resolveLife, type LifeEv } from './life';
 import { CHILD, RACIAL, ROMANCE, TRAIT } from './lifeData1';
 import { JOBS } from './lifeData2';
 import { DRAGON, GUARDIAN, POWER } from './lifeData3';
@@ -179,7 +179,7 @@ LIFE.push({
       eventId: 'war_call', title: '징집령', data: { enemy: e.id, p },
       text: `${f.name}과(와) ${e.name}의 전쟁이 한창이다. 징집관이 ${c.name}의 문을 두드렸다.`,
       choices: [
-        ok('fight', '최전선에 선다', '승리 시 명성·명예 대폭 상승, 부상·전사 위험', p),
+        ok('fight', '전선으로 나간다', '가까운 주둔지로 가거나 다음 출정군에 합류한다. 그 뒤로는 군대와 함께 움직인다'),
         ok('support', '후방에서 보급을 돕는다', '명예 소폭 상승, 안전'),
         ok('flee', '몰래 달아난다', '명예 크게 하락'),
       ],
@@ -188,6 +188,9 @@ LIFE.push({
   resolve: (w, c, ch, d) => {
     const e = w.factions[+d.enemy];
     if (ch === 'fight') {
+      return runEnlist(w, c);
+    }
+    if (ch === 'fight_old') {
       if (w.rngSim.chance(+d.p)) {
         c.fame += 25; c.honor += 20; c.stats.might += 3; c.stats.command += 3;
         addNews(w, `${c.name}이(가) ${e?.name ?? '적'}과(와)의 전투에서 큰 공을 세웠다.`, 2, 'player', { chars: [c.id] });
@@ -565,6 +568,10 @@ LIFE.push({
 // ───────────── 진행
 
 const P0 = (w: World): Record<string, number> => (w.player!.flags ??= {});
+/** 징집에 응한다: 효과는 lifeData12의 'enlist' */
+function runEnlist(w: World, c: Character): string {
+  return applyFx(makeCtx(w, c), 'enlist') || '전선으로 나갈 채비를 하였다.';
+}
 
 export function playerTick(w: World): void {
   // 처지가 크게 바뀌었는지는 선택지가 떠 있어도 매달 살핀다
@@ -645,7 +652,7 @@ export function playerTick(w: World): void {
         && (a.faction === dlf || w.factions[a.faction]?.flags.includes('dlvassal')) && a.l === home.l && dist(a, home) < 25)) markPeril(w, 'dlarmy', home);
     }
     // 세상의 재앙에 휘말렸다
-    for (const ev of [...AFTERMATH, ...TRIP, ...DESTINY, ...PERIL, ...DL_PERIL]) {
+    for (const ev of [...AFTERMATH, ...TRIP, ...DESTINY, ...SOLDIER, ...PERIL, ...DL_PERIL]) {
       const last = P.lastEvents[ev.id];
       if (!fitsLife(w, c, ev.id)) continue;
       if (ev.once && last !== undefined) continue;
@@ -773,7 +780,7 @@ function fitsLife(w: World, c: Character, id: string): boolean {
   if (RACES[c.race].needs[0] === 0 && UNDEAD_SKIP.has(id)) return false;
   return true;
 }
-const POOL_MAP = new Map<string, LifeEv>([...POOL, ...SEA, ...STORY, ...PERIL, ...MILESTONES, ...JOB_OFFER, ...INVITES, ...PARTY_EV, ...ARMY_EV, ...TRAVEL_EV, ...TRAVEL2, ...PRISON, ...AFTERMATH, ...TRIP, ...DESTINY, ...CARE, ...DL_PERIL, ...WORLD_LIFE, JOB_SEARCH, ADVENTURER_TIRED].map(e => [e.id, e]));
+const POOL_MAP = new Map<string, LifeEv>([...POOL, ...SEA, ...STORY, ...PERIL, ...MILESTONES, ...JOB_OFFER, ...INVITES, ...PARTY_EV, ...ARMY_EV, ...TRAVEL_EV, ...TRAVEL2, ...PRISON, ...AFTERMATH, ...TRIP, ...DESTINY, ...SOLDIER, ...CARE, ...DL_PERIL, ...WORLD_LIFE, JOB_SEARCH, ADVENTURER_TIRED].map(e => [e.id, e]));
 export const LIFE_EVENT_COUNT = () => POOL.length + LIFE.length + 2;
 
 export function resolvePlayer(w: World, choiceId: string): string {

@@ -342,6 +342,9 @@ function bumpFlag(x: Ctx, k: string, d = 1) {
 
 // ───────────── 특수 효과
 
+/** 특수 효과를 바로 부른다 (다른 모듈의 선택지에서) */
+export function applyFx(x: Ctx, fx: string, data: PlayerPrompt['data'] = {}): string { return runFx(x, fx, data) || ''; }
+
 function runFx(x: Ctx, fx: string, data: PlayerPrompt['data']): string | void {
   // 다른 모듈이 등록한 효과 (원정, 재앙, 이어지는 이야기)
   for (const h of FX_HOOKS) { const r = h(x, fx, data); if (r !== null) return r; }

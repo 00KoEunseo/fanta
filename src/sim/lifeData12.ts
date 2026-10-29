@@ -9,6 +9,7 @@ import { RACES } from '../data/races';
 import { addNews, charLog } from './news';
 import { addRel, approxDist, clamp, isHero, leaderOf, rel } from './helpers';
 import { relocate, setTravel } from './characters';
+import { releasePlayer } from './camps';
 import { attemptCoup, secede } from './factions';
 import { killChar } from './characters';
 import { becomeDemonLord } from './events';
@@ -234,6 +235,23 @@ export const CRAFT: LifeEv[] = [
     o('늙은 선장의 이야기를 듣는다', { r: '먼 바다의 섬과 괴수 이야기를 들었다.', in: 1, tr: [[CUR, 4]] })]),
 ];
 
+// ───────────── 주둔지의 병사 (근무 중에만)
+
+const stationed = (x: Ctx) => fl(x, 'campSoldier') !== undefined && x.c.act.kind === 'camp';
+const campName = (x: Ctx) => x.w.camps?.[fl(x, 'campSoldier') ?? -1]?.name ?? '주둔지';
+const campFoe = (x: Ctx) => x.w.factions[x.w.camps?.[fl(x, 'campSoldier') ?? -1]?.enemy ?? -1]?.name ?? '적';
+export const SOLDIER: LifeEv[] = [
+  { id: 'sd_days', t: '주둔지의 나날', cd: 8, c: all(adult, stationed),
+    x: x => [`${campName(x)}의 아침. 진흙투성이 막사에서 눈을 떴다. 지평선 너머 어딘가에 ${campFoe(x)}의 군대가 있다.`, `${campName(x)}에 비가 사흘째 내린다. 병사들은 젖은 장작에 불을 붙이느라 애를 먹는다.`, `${campName(x)}의 식량 수레가 늦는다. 병사들 사이에 불평이 늘었다.`][(x.w.t + x.c.id) % 3],
+    o: [o('창술 훈련에 매달린다', { r: '하루 종일 허수아비를 찔렀다. 팔이 단단해졌다.', mi: 2 }),
+      o('척후로 나간다', { r: `적의 진지를 엿보고 돌아왔다. 지휘관이 이름을 기억해 두었다.`, fame: 5, co: 1 }, '들키면 다친다', ['co', 0.5], { r: '적의 척후와 마주쳐 칼을 섞었다.', hp: -20 }),
+      o('동료들과 불가에 둘러앉는다', { r: '고향 이야기로 밤이 깊었다. 전우가 생겼다.', ch: 2, mood: 6 }),
+      o('밤을 틈타 달아난다', { r: '', fx: 'sd_desert' }, '탈영병의 낙인이 찍힌다')] },
+  { id: 'sd_rotation', t: '교대', cd: 24, c: all(adult, stationed, x => x.w.t - (fl(x, 'campSince') ?? x.w.t) >= 24),
+    x: x => `${campName(x)}에 온 지 ${Math.floor((x.w.t - (fl(x, 'campSince') ?? x.w.t)) / 12)}년. 교대 병력이 도착하였다. 고향으로 돌아갈 수 있다.`,
+    o: [o('고향으로 돌아간다', { r: '', fx: 'sd_leave' }), o('남아서 끝까지 싸운다', { r: '병사들이 당신을 고참이라 부르기 시작하였다.', fame: 4, co: 2, tr: [[LOY, 3]] })] },
+];
+
 // ───────────── 운명의 문: 큰 뜻을 품고 걸어온 이에게 열리는 길
 
 const lightBorn = (x: Ctx) => RACES[x.c.race].align !== 'dark';
@@ -313,6 +331,22 @@ FX_HOOKS.push((x, fx) => {
       if (!rng.chance(clamp(0.35 + c.stats.magic / 200, 0.35, 0.85))) { c.stats.health = clamp(c.stats.health - 40); return '왕좌는 손에 넣었으나 피의 의식은 실패하였다. 마기가 몸을 할퀴었다.'; }
       becomeDemonLord(w, f);
       return '왕좌를 빼앗고 피의 의식을 치렀다. 하늘이 검게 물들었다.';
+    }
+    case 'sd_leave': releasePlayer(w, '교대 명령을 받고 고향으로 돌아왔다.'); return '고향으로 가는 길에 올랐다.';
+    case 'sd_desert': {
+      const f = x.f;
+      releasePlayer(w, '주둔지에서 달아났다.', 3);
+      c.honor -= 20; c.fame = Math.max(0, c.fame - 5);
+      if (f && rng.chance(0.35)) { imprison(x, f.leader, rng.int(6, 18), '탈영죄'); return '고향 어귀에서 붙잡혔다. 탈영병은 옥에 갇혔다.'; }
+      return '밤을 틈타 울타리를 넘었다. 고향 사람들의 눈길이 차갑다.';
+    }
+    case 'enlist': {
+      // 가까운 제 나라 주둔지로 간다. 없으면 다음 출정군에 이름을 올린다
+      const f = x.f;
+      const k = (w.camps ?? []).filter(k2 => k2.alive && k2.faction === c.faction && k2.l === c.l).sort((a, b) => dist(a, c) - dist(b, c))[0];
+      if (k && setTravel(w, c, k, 'quest')) { P.flags.campDuty = k.id; return `창 한 자루를 받아 들고 ${k.name}(으)로 향하였다.`; }
+      P.flags.enlisted = w.t;
+      return `${f?.name ?? '나라'}의 다음 출정군 명부에 이름을 올렸다. 군대가 떠날 때 부름이 올 것이다.`;
     }
     case 'trip_no': P.flags.tripNo = w.t; delete P.flags.tripT; if (c.act.kind === 'travel') { c.act = { kind: 'idle' }; if (x.home && x.home.alive) relocate(w, c, x.home); } return;
     case 'prison_cut': P.flags.prison = Math.max(w.t + 1, (P.flags.prison ?? w.t) - 12); return;

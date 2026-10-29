@@ -20,7 +20,7 @@ for (const seed of (argv[2] ?? 'IS-1').split(',')) {
   for (const f of w.factions) born.set(f.id, { t: 0, how: '건국', n: f.settlements.length });
   const crossed = new Set<string>();
   const angelOut = new Set<number>(), angelKing = new Set<number>();
-  let last = -1, prevDL = w.demonLord;
+  let last = -1, prevDL = w.demonLord, treeOwner = w.settlements[w.worldTree?.sid ?? -1]?.faction ?? -1, treeFlips = 0, treeRaids = 0;
   const dlEnds: string[] = [];
   const samples: string[] = [];
   for (let i = 0; i < 12 * years; i++) {
@@ -58,6 +58,7 @@ for (const seed of (argv[2] ?? 'IS-1').split(',')) {
       const apart0 = Math.abs(A0.x - B0.x) > 2 || Math.abs(A0.y - B0.y) > 2;
       if (apart0 && md <= 1.5 && (Math.abs(A1.x - B1.x) > 2 || Math.abs(A1.y - B1.y) > 2)) inc('군대:스쳐지남');
     }
+    { const ts = w.settlements[w.worldTree?.sid ?? -1]; if (ts && ts.faction !== treeOwner) { treeFlips++; treeOwner = ts.faction; } if (ts && ts.lastAttacked === w.t) treeRaids++; }
     if (w.demonLord !== prevDL) { if (prevDL >= 0) { const d = w.chars[prevDL]; dlEnds.push(`${yearOf(w) - y0}년 ${d.died >= 0 ? d.cause : '물러남'}`); } prevDL = w.demonLord; }
     if (i % 6 === 0) {
       // 엇갈린 주둔지
@@ -117,7 +118,7 @@ for (const seed of (argv[2] ?? 'IS-1').split(',')) {
   const rels: number[] = [];
   for (const f of w.factions) if (f.alive) for (const [k, v] of Object.entries(f.relations)) { const o = w.factions[+k]; if (o && o.alive && o.id > f.id) rels.push(v); }
   const share = (p: (v: number) => boolean) => Math.round(rels.filter(p).length / Math.max(1, rels.length) * 100);
-  Object.assign(out, { 통수: c['배신(통수)'] ?? 0, '관계±90+%': share(v => Math.abs(v) >= 90), '관계±30안%': share(v => Math.abs(v) < 30), '관계30~90%': share(v => Math.abs(v) >= 30 && Math.abs(v) < 90) });
+  Object.assign(out, { 세계수주인바뀜: treeFlips, 세계수공격받음: treeRaids, 통수: c['배신(통수)'] ?? 0, '관계±90+%': share(v => Math.abs(v) >= 90), '관계±30안%': share(v => Math.abs(v) < 30), '관계30~90%': share(v => Math.abs(v) >= 30 && Math.abs(v) < 90) });
   console.log(`== ${seed} (${Math.floor(w.t / 12)}년)`, JSON.stringify(out));
   if (dlEnds.length || w.demonLord >= 0) console.log('   마왕의 최후:', dlEnds.join(' / ') || '-', w.demonLord >= 0 ? '(지금도 군림)' : '');
   for (const s of samples) console.log('   ', s);
