@@ -72,7 +72,7 @@ export function aggregate(w: World, f: Faction): void {
   if (f.flags.includes('ancient_magic')) bonus += 0.25;
   if (hasFlag(f, 'waaagh', w.t)) bonus += 0.3;
   if (f.flags.some(x => x.startsWith('patron:'))) bonus += 0.4;
-  if (w.demonLord >= 0 && w.chars[w.demonLord]?.faction === f.id) bonus += 0.5 + Math.min(0.5, demonsServing(w, w.demonLord) * 0.06);
+  if (w.demonLord >= 0 && w.chars[w.demonLord]?.faction === f.id) bonus += 0.5 + Math.min(0.3, demonsServing(w, w.demonLord) * 0.04);
   f.pop = pop;
   f.avgDev = pop > 0 ? dev / pop : 0;
   f.military = mil * bonus;
@@ -879,7 +879,8 @@ function tryColonize(w: World, f: Faction): void {
   const crowded = ss.filter(s => s.pop > 220 && (s.pop > capacity(w, s) * 0.6 || (s.race === 'majin' && s.pop > 350)));
   if (!crowded.length) return;
   const from = rng.pick(crowded);
-  if (!R.layers.includes(from.l) && !rng.chance(0.3)) return;
+  // 제 땅이 아닌 층(하늘섬 등)의 고을은 그 층에 새 고을을 내지 않는다 (하늘은 탑으로만 오른다)
+  if (!R.layers.includes(from.l)) return;
   const site = findColonySite(w, from, from.race);
   if (!site) return;
   // 이주를 이끌 인물

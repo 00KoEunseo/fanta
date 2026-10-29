@@ -26,6 +26,22 @@ export const DEMON_NAMES = [
 export type Whim = 'feast' | 'aid' | 'serve' | 'ascend' | 'joker' | 'idle';
 export interface Archdemon { rank: number; lair: Pos; task?: { kind: string; target: number; t: number }; servesDL?: number }
 
+/** 악마마다 타고난 본성 (이름의 순서로 정해진다): 하는 일과 일대기의 결이 달라진다 */
+export const NATURES = ['분노', '탐욕', '거짓', '역병', '전쟁', '욕망', '절망'] as const;
+export function natureOf(c: Character): typeof NATURES[number] {
+  const i = DEMON_NAMES.indexOf(c.name);
+  return NATURES[(i >= 0 ? i : (c.archdemon?.rank ?? 0)) % NATURES.length];
+}
+const NATURE_LINES: Record<typeof NATURES[number], string[]> = {
+  분노: ['화산의 목을 움켜쥐고 불을 토하게 하였다.', '분노에 겨워 산 하나를 무너뜨렸다.', '잿빛 황야에 핏빛 번개를 내리꽂았다.'],
+  탐욕: ['보물 더미 위에서 금화를 세며 한 철을 보냈다.', '다른 악마의 보물고를 엿보며 입맛을 다셨다.', '마족들에게서 거둔 공물을 녹여 왕관을 하나 더 만들었다.'],
+  거짓: ['마족 둘 사이에 거짓말을 흘려 싸움을 붙였다.', '스스로의 그림자에게 거짓 이름을 붙여 돌려보냈다.', '지상의 꿈속을 떠돌며 달콤한 거짓말을 속삭였다.'],
+  역병: ['썩은 늪에서 새 병을 빚어 병에 담았다.', '마계의 우물 하나에 독을 풀어 보았다.', '파리 떼를 거느리고 잿빛 들판을 걸었다.'],
+  전쟁: ['마족 전사들을 모아 피의 시합을 열었다.', '부러진 칼들을 녹여 거대한 대검을 벼렸다.', '옛 전쟁의 해골들을 일으켜 진법을 익히게 하였다.'],
+  욕망: ['마계의 연회장에서 밤새 춤추고 마셨다.', '지상에서 홀린 이들의 넋을 보석 상자에 모았다.', '자신에게 바칠 노래를 짓게 하고는 듣다가 싫증을 냈다.'],
+  절망: ['끝없는 잿빛 황야에 홀로 앉아 침묵하였다.', '지상의 비명을 엿들으며 눈을 감았다.', '무너진 신전의 잔해 위에 앉아 백 년 전의 일을 곱씹었다.'],
+};
+
 /** 서열에 따른 칭호 */
 export function demonTitle(c: Character): string {
   const r = c.archdemon?.rank ?? 66;
@@ -70,6 +86,10 @@ export function demonMonth(w: World, c: Character): void {
   const rng = w.rngSim;
   c.stats.health = clamp(c.stats.health + 4);
   if (c.act.kind !== 'idle') return;
+  // 마계의 정치: 서열 다툼, 어둠의 군주와의 계약, 마왕을 버림
+  if (!A.task && rng.chance(0.004) && rivalry(w, c)) return;
+  if (!A.task && rng.chance(0.0025) && darkPact(w, c)) return;
+  if (A.servesDL !== undefined && rng.chance(0.01) && forsake(w, c)) return;
   if (A.task) {
     const done = resolve(w, c, A.task);
     if (done || w.t - A.task.t > 30) A.task = undefined;
@@ -81,6 +101,7 @@ export function demonMonth(w: World, c: Character): void {
   if (!task) return;
   // 둥지 주변을 어슬렁거린다
   if (task.kind === 'roam') {
+    if (rng.chance(0.35)) { const lines = NATURE_LINES[natureOf(c)]; charLog(w, c, rng.pick(lines), 2); }
     const L = w.layers[A.lair.l];
     const to = { l: A.lair.l, x: clamp(A.lair.x + rng.int(-8, 8), 1, L.w - 2), y: clamp(A.lair.y + rng.int(-8, 8), 1, L.h - 2) };
     setTravel(w, c, to, 'quest');
@@ -104,7 +125,9 @@ function pick(w: World, c: Character): { kind: string; target: number } | null {
   }
   // 마왕이 섰으면 셋에 하나는 곁에 선다
   const dl = w.demonLord >= 0 ? w.chars[w.demonLord] : null;
-  if (dl && dl.died < 0 && A.servesDL !== dl.id && rng.chance(0.12)) return { kind: 'serve', target: dl.id };
+  // 마왕 곁에 서는 것은 본성이 맞는 악마가 더 잦다 (분노·전쟁·절망은 마왕의 칼이 되고, 거짓·탐욕은 제 잇속을 먼저 챙긴다)
+  const nat = natureOf(c);
+  if (dl && dl.died < 0 && A.servesDL !== dl.id && rng.chance(nat === '분노' || nat === '전쟁' || nat === '절망' ? 0.06 : 0.025)) return { kind: 'serve', target: dl.id };
   const majin = w.settlements.filter(s => s.alive && s.race === 'majin' && s.l === c.l && dist(s, c) <= 25);
   if (roll < 0.55 && majin.length) {
     const s = rng.pick(majin);
@@ -168,7 +191,7 @@ function resolve(w: World, c: Character, t: { kind: string; target: number }): b
       const g = Math.min(s.stock[GOLD] * 0.15, 40), m = Math.min(s.stock[MANA] * 0.15, 30);
       s.stock[GOLD] -= g; s.stock[MANA] -= m; c.wealth += g;
       s.stability = clamp(s.stability + 4);
-      charLog(w, c, `${s.name}의 마족들에게서 공양을 받았다.`, 1);
+      charLog(w, c, `${s.name}의 마족들에게서 공양을 받았다.`, rng.chance(0.3) ? 2 : 1);
       if (rng.chance(0.1)) addNews(w, `${s.name}의 마족들이 ${demonTitle(c)} ${c.name}에게 제물을 바쳤다. 마계의 하늘이 붉게 일렁였다.`, 2, 'dark', { pos: s, chars: [c.id], facs: [s.faction] });
       return true;
     }
@@ -176,7 +199,6 @@ function resolve(w: World, c: Character, t: { kind: string; target: number }): b
       const killed = Math.round(s.pop * rng.float(0.04, 0.1));
       s.pop -= killed; s.stability = clamp(s.stability - 15); s.lastAttacked = w.t;
       const f = w.factions[s.faction];
-      charLog(w, c, `${s.name}을(를) 덮쳤다.`, 2);
       addNews(w, t.kind === 'aid' ? `${demonTitle(c)} ${c.name}이(가) 마족의 편에 서서 ${s.name}을(를) 덮쳤다. ${killed}명이 쓰러졌다.`
         : `${demonTitle(c)} ${c.name}이(가) 오래 끄는 전쟁에 끼어들어 ${f?.name ?? s.name}을(를) 덮쳤다. 판이 뒤집혔다.`, 3, 'dark', { pos: s, chars: [c.id], facs: [s.faction] });
       return true;
@@ -216,3 +238,63 @@ export function demonsServing(w: World, dlId: number): number {
 
 /** 악마에게 도전: 이름을 얻으려는 이에게 악마는 좋은 상대다 (paragon의 명예 목적에서 쓴다) */
 export function demonDuel(w: World, a: Character, d: Character): Character { return duel(w, a, d, '악마와의 결투'); }
+
+// ───────────── 마계의 정치
+
+/** 서열 다툼: 바로 위의 악마(다섯 자리 안)에게 도전한다. 이기면 자리를 바꾼다 (악마는 죽지 않고 물러날 뿐) */
+function rivalry(w: World, c: Character): boolean {
+  const rng = w.rngSim;
+  const A = c.archdemon!;
+  if (A.rank <= 1) return false;
+  const above = w.chars.filter(o => o.died < 0 && o.archdemon && o.archdemon.rank < A.rank && o.archdemon.rank >= A.rank - 5 && o.l === c.l);
+  if (!above.length) return false;
+  const o = rng.pick(above);
+  const pa = charPower(c, w) * rng.float(0.7, 1.3), po = charPower(o, w) * rng.float(0.7, 1.3);
+  const nat = natureOf(c);
+  const how = { 분노: '정면으로 들이받았다', 탐욕: '보물을 걸고 내기를 청하였다', 거짓: '거짓 소문으로 그의 가신들을 빼돌렸다', 역병: '그의 둥지에 병을 풀었다', 전쟁: '군세를 이끌고 둥지를 에워쌌다', 욕망: '그의 총신들을 홀려 등을 돌리게 하였다', 절망: '그의 귀에 끝없는 절망을 속삭였다' }[nat];
+  if (pa > po) {
+    const r = A.rank; A.rank = o.archdemon!.rank; o.archdemon!.rank = r;
+    c.epithet = demonTitle(c); o.epithet = demonTitle(o);
+    c.fame += 15; o.stats.health = clamp(o.stats.health - 40);
+    charLog(w, c, `${o.name}에게 도전하여 ${how}. 서열 ${A.rank}위의 자리를 빼앗았다.`, 3);
+    charLog(w, o, `${c.name}에게 서열을 빼앗기고 ${o.archdemon!.rank}위로 밀려났다.`, 3);
+    addNews(w, `마계가 흔들렸다. ${c.name}이(가) ${o.name}에게 ${how}. ${c.name}은(는) 이제 마계 서열 ${A.rank}위의 ${demonTitle(c)}이다.`, A.rank <= 9 ? 3 : 2, 'dark', { pos: c, chars: [c.id, o.id] });
+  } else {
+    c.stats.health = clamp(c.stats.health - 50);
+    charLog(w, c, `${o.name}에게 도전하였으나 물러났다. 상처를 핥으며 둥지로 돌아갔다.`, 2);
+    charLog(w, o, `서열을 노린 ${c.name}을(를) 물리쳤다.`, 2);
+  }
+  return true;
+}
+
+/** 어둠의 군주와 계약한다: 피의 제물을 받고, 그 나라의 군세에 십 년 동안 힘을 보탠다 */
+function darkPact(w: World, c: Character): boolean {
+  const cands = w.factions.filter(f => f.alive && RACES[f.race].align === 'dark' && !RACES[f.race].noPop && !f.flags.some(x => x.startsWith('demonpact:')) && w.chars[f.leader]?.died < 0);
+  if (!cands.length) return false;
+  const f = w.rngSim.pick(cands);
+  const ld = w.chars[f.leader];
+  const cap = w.settlements[f.capital];
+  if (!cap || !ld) return false;
+  f.flags.push(`demonpact:${w.t + 120}`);
+  const paid = Math.round(cap.pop * 0.03);
+  cap.pop -= paid;
+  charLog(w, c, `${f.name}의 ${ld.name}과(와) 피의 계약을 맺었다.`, 3);
+  charLog(w, ld, `악마 ${c.name}과(와) 피의 계약을 맺었다. ${paid}명의 피가 제물로 바쳐졌다.`, 3);
+  addNews(w, `${f.name}의 ${ld.name}이(가) ${demonTitle(c)} ${c.name}과(와) 피의 계약을 맺었다. ${cap.name}의 제단에 ${paid}명의 피가 흘렀다. 그 나라의 군세에 마계의 힘이 깃들었다.`, 3, 'dark', { pos: cap, facs: [f.id], chars: [ld.id, c.id] });
+  return true;
+}
+
+/** 마왕을 버린다: 마왕이 밀리거나, 본성이 맞지 않으면 제 둥지로 돌아간다 */
+function forsake(w: World, c: Character): boolean {
+  const A = c.archdemon!;
+  const dl = w.chars[A.servesDL ?? -1];
+  if (!dl || dl.died >= 0 || w.demonLord !== dl.id) { A.servesDL = undefined; return false; }
+  const dlf = w.factions[dl.faction];
+  const losing = !!dlf && Object.keys(dlf.wars).some(id => (dlf.warState?.[+id]?.score ?? 0) < -40);
+  const fickle = natureOf(c) === '거짓' || natureOf(c) === '탐욕' || natureOf(c) === '욕망';
+  if (!losing && !(fickle && w.rngSim.chance(0.3))) return false;
+  A.servesDL = undefined;
+  charLog(w, c, `마왕 ${dl.name}의 곁을 떠났다.`, 3);
+  addNews(w, `${demonTitle(c)} ${c.name}이(가) ${losing ? '기울어 가는 ' : ''}마왕 ${dl.name}의 곁을 떠나 마계의 둥지로 돌아갔다.`, 3, 'dark', { pos: c, chars: [c.id, dl.id] });
+  return true;
+}

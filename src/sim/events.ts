@@ -432,7 +432,7 @@ ev({
   fire: (w, f: Faction) => {
     const cap = w.settlements[f.capital];
     if (!cap) return;
-    const raised = Math.round(w.corpses * 0.35);
+    const raised = Math.round(w.corpses * 0.2);
     w.corpses -= raised;
     cap.pop += raised;
     addNews(w, `${f.name}의 사령술사들이 전장의 시체 ${raised}구를 일으켜 세웠다.`, 3, 'dark', { facs: [f.id], pos: cap });

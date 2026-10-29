@@ -1098,12 +1098,15 @@ function dragonMonth(w: World, c: Character): void {
   if (skyHome && !c.ancient && c.dragonKind !== 'patron') {
     const intruders = w.settlements.filter(s => s.alive && s.l === 1 && !RACES[s.race].layers.includes(1) && s.faction !== c.patronOf && approxDist(w, c, s, true) < 45
       && (s.lastBurned === undefined || w.t - s.lastBurned >= 18));
-    if (intruders.length && rng.chance((c.sleep ?? 0) > 0 ? 0.01 : 0.035)) {
+    if (intruders.length && rng.chance((c.sleep ?? 0) > 0 ? 0.015 : 0.05)) {
       const s = rng.pick(intruders);
       c.sleep = 0;
       if (setTravel(w, c, s, 'hunt', s.id)) {
         charLog(w, c, `하늘섬을 더럽힌 ${s.name}을(를) 향해 날아올랐다.`, 2);
-        if (rng.chance(0.5)) addNews(w, `하늘의 용 ${c.name}이(가) 하늘섬의 침입자들이 세운 ${s.name}을(를) 향해 날개를 폈다.`, 3, 'dark', { pos: s, chars: [c.id], facs: [s.faction] });
+        // 하늘의 다른 용들도 함께 날아오른다
+        const kin = w.chars.filter(d => d.died < 0 && d !== c && d.race === 'dragon' && !d.ancient && (d.lair ?? d).l === 1 && d.act.kind === 'idle' && d.dragonKind !== 'patron' && approxDist(w, d, s, true) < 40);
+        for (const d of kin) if (rng.chance(0.5)) { d.sleep = 0; setTravel(w, d, s, 'hunt', s.id); }
+        if (rng.chance(0.5)) addNews(w, `하늘의 용 ${c.name}이(가) 하늘섬의 침입자들이 세운 ${s.name}을(를) 향해 날개를 폈다.${kin.length ? ' 다른 용들의 포효가 구름 사이로 화답하였다.' : ''}`, 3, 'dark', { pos: s, chars: [c.id], facs: [s.faction] });
         return;
       }
     }
@@ -1144,7 +1147,9 @@ export function dragonRaid(w: World, c: Character, s: Settlement): void {
   w.stats.dragonRaids = (w.stats.dragonRaids ?? 0) + 1;
   const f = w.factions[s.faction];
   const rage = rageOf(w, c);
-  const killed = Math.round(Math.min(s.pop * 0.6, s.pop * rng.float(0.04, 0.14) * (c.ancient ? 1.2 + 2 * rage : 1)));
+  // 하늘의 용이 하늘섬의 침입자를 덮칠 때는 쫓아낼 때까지 불을 뿜는다
+  const skyWrath = s.l === 1 && (c.lair ?? c).l === 1 && !RACES[s.race].layers.includes(1);
+  const killed = Math.round(Math.min(s.pop * 0.6, s.pop * rng.float(0.04, 0.14) * (c.ancient ? 1.2 + 2 * rage : 1) * (skyWrath ? 2.5 : 1)));
   if (c.ancient && rage > 0.2) {
     // 불길은 이름난 자들도 가리지 않는다
     // 불길은 사람을 가리지 않는다 ('나'도)
@@ -1159,6 +1164,11 @@ export function dragonRaid(w: World, c: Character, s: Settlement): void {
   s.lastAttacked = w.t;
   s.lastBurned = w.t;
   c.wealth += gold; c.fame += 10;
+  if (skyWrath && s.pop < 120) {
+    // 작은 개척지는 버티지 못한다: 살아남은 이들은 탑을 타고 내려간다
+    s.pop = 8; s.stability = 0;
+    addNews(w, `하늘의 용 ${c.name}의 불길에 ${s.name}이(가) 잿더미가 되었다. 살아남은 개척민들은 구름 아래로 달아났다. 하늘은 다시 용들의 것이다.`, 3, 'dark', { pos: s, chars: [c.id], facs: f ? [f.id] : [] });
+  }
   addNews(w, tpl('{d:이} {s:을} 불태웠다. {n}명이 목숨을 잃고 금고가 텅 비었다.', { d: charLabel(w, c), s: s.name, n: killed }), c.ancient ? 4 : 3, 'dark',
     { pos: s, chars: [c.id], facs: f ? [f.id] : [] });
   // 지역 용감한 자가 맞설 수도 있다

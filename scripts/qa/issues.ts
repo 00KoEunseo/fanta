@@ -92,7 +92,7 @@ for (const seed of (argv[2] ?? 'IS-1').split(',')) {
         ['반란:독립', /독립하여 .+선포|스스로 깃발을 올렸다|독립을 선언/], ['반란:동참', /함께 .+에 등을 돌렸다/], ['반란:분리', /정착지를 이끌고 .+에서 떨어져 나와/],
         ['심연 촉수 베임', /촉수 하나를 베어 냈다/], ['심연 물러감', /심연으로 가라앉았다/], ['바다괴수 전투', /맞서 깊은 상처|맞섰으나 참패/],
         ['하늘 용 습격', /하늘을 더럽히는|하늘섬의 침입자/], ['성역 함락', /천상의 성역이 .+에게 짓밟혔다/], ['하늘의 왕좌', /【하늘의 왕좌】/],
-        ['마왕 강림', /봉인 붕괴】.*마왕이 왕좌/], ['마왕 토벌대', /토벌대/], ['용사-마왕 결전', /용사 .+마왕 .+옥좌 앞에 섰다/], ['용사가 마왕을', /용사 .+의 검이 마왕/], ['대치', /맞닥뜨렸다. 양쪽이 진을/], ['들판 진지', /그 자리에 진지를 세웠다/], ['수호룡 요격', /수호룡 .+군대를 하늘에서 덮쳤다/], ['권속', /심연의 권속 .+기어 나와/], ['천사 탈환', /천사들.+되찾았다/], ['길의 칼부림', /칼부림이 벌어졌다/], ['선포', /전쟁을 선포하였다/], ['배신(통수)', /등에 칼을 꽂았다/], ['세계 멸망', /【세계 멸망】/],
+        ['마왕 강림', /봉인 붕괴】.*마왕이 왕좌/], ['마왕 토벌대', /토벌대/], ['용사-마왕 결전', /용사 .+마왕 .+옥좌 앞에 섰다/], ['용사가 마왕을', /용사 .+의 검이 마왕/], ['대치', /맞닥뜨렸다. 양쪽이 진을/], ['들판 진지', /그 자리에 진지를 세웠다/], ['수호룡 요격', /수호룡 .+군대를 하늘에서 덮쳤다/], ['권속', /심연의 권속 .+기어 나와/], ['천사 탈환', /천사들.+되찾았다/], ['길의 칼부림', /칼부림이 벌어졌다/], ['선포', /전쟁을 선포하였다/], ['배신(통수)', /등에 칼을 꽂았다/], ['연맹결성', /연맹.*결성|연맹을 맺|연맹이 꾸려/], ['마왕진군', /마왕 .+의 명으로 마계의 군세/], ['성역진군', /천상의 성역으로 진군한다/], ['하늘개척', /하늘섬에 (마을|마성)/], ['악마행적', /악마 |마왕 .+의 곁에 섰다|우물에 무언가를|속삭임/], ['세계 멸망', /【세계 멸망】/],
       ] as [string, RegExp][]) if (re.test(t)) inc(k);
     }
     last = w.nextNewsId - 1;
@@ -118,7 +118,12 @@ for (const seed of (argv[2] ?? 'IS-1').split(',')) {
   const rels: number[] = [];
   for (const f of w.factions) if (f.alive) for (const [k, v] of Object.entries(f.relations)) { const o = w.factions[+k]; if (o && o.alive && o.id > f.id) rels.push(v); }
   const share = (p: (v: number) => boolean) => Math.round(rels.filter(p).length / Math.max(1, rels.length) * 100);
-  Object.assign(out, { 세계수주인바뀜: treeFlips, 세계수공격받음: treeRaids, 통수: c['배신(통수)'] ?? 0, '관계±90+%': share(v => Math.abs(v) >= 90), '관계±30안%': share(v => Math.abs(v) < 30), '관계30~90%': share(v => Math.abs(v) >= 30 && Math.abs(v) < 90) });
+  // 하늘섬(층 1)의 고을 수와 그 주인 (마지막 시점)
+  const skyS = w.settlements.filter(s => s.alive && s.l === 1);
+  const alive = w.factions.filter(f => f.alive && !RACES[f.race].noPop);
+  const popOf = (al: string) => w.settlements.filter(s => s.alive && RACES[s.race].align === al).reduce((a, s) => a + s.pop, 0);
+  const allPop = w.settlements.filter(s => s.alive).reduce((a, s) => a + s.pop, 0);
+  Object.assign(out, { 빛세력: alive.filter(f => RACES[f.race].align === 'light').length, 어둠세력: alive.filter(f => RACES[f.race].align === 'dark').length, '어둠인구%': Math.round(popOf('dark') / Math.max(1, allPop) * 100), '빛인구%': Math.round(popOf('light') / Math.max(1, allPop) * 100), 연맹결성: c['연맹결성'] ?? 0, 마왕진군: c['마왕진군'] ?? 0, 성역진군: c['성역진군'] ?? 0, 하늘개척: c['하늘개척'] ?? 0, 하늘고을끝: skyS.length, 하늘고을어둠: skyS.filter(s => RACES[w.factions[s.faction]?.race ?? 'human'].align === 'dark').length, 악마소식: c['악마행적'] ?? 0, 세계수주인바뀜: treeFlips, 세계수공격받음: treeRaids, 통수: c['배신(통수)'] ?? 0, '관계±90+%': share(v => Math.abs(v) >= 90), '관계±30안%': share(v => Math.abs(v) < 30), '관계30~90%': share(v => Math.abs(v) >= 30 && Math.abs(v) < 90) });
   console.log(`== ${seed} (${Math.floor(w.t / 12)}년)`, JSON.stringify(out));
   if (dlEnds.length || w.demonLord >= 0) console.log('   마왕의 최후:', dlEnds.join(' / ') || '-', w.demonLord >= 0 ? '(지금도 군림)' : '');
   for (const s of samples) console.log('   ', s);

@@ -52,7 +52,7 @@ const baseNeeds = [1, 0.1, 0.05, 0.03, 0, 0.01];
 race({
   key: 'human', name: '인간', glyph: 'H', color: '#f0c674', layers: [L_SURFACE],
   prefer: { [Tr.PLAIN]: 3, [Tr.GRASS]: 3, [Tr.HILL]: 1, [Tr.FOREST]: 1 },
-  moveOverride: {}, lifespan: [64, 12], adult: 16, growth: 0.0045,
+  moveOverride: {}, lifespan: [64, 12], adult: 16, growth: 0.005,
   needs: baseNeeds, prodMul: [1.1, 1, 1, 1, 0.8, 1.1], flying: false,
   aggression: 0.55, trade: 0.7, might: 1, magic: 0.6, align: 'light', startFactions: 3, startPop: [130, 220],
   aptBias: [5, 10, -5, 0, 5, 3], traitBias: {},
@@ -63,7 +63,7 @@ race({
 race({
   key: 'elf', name: '엘프', glyph: 'E', color: '#7fe07f', layers: [L_SURFACE],
   prefer: { [Tr.DEEPFOREST]: 4, [Tr.FOREST]: 3 },
-  moveOverride: { [Tr.FOREST]: 1, [Tr.DEEPFOREST]: 1 }, lifespan: [420, 80], adult: 40, growth: 0.0026,
+  moveOverride: { [Tr.FOREST]: 1, [Tr.DEEPFOREST]: 1 }, lifespan: [420, 80], adult: 40, growth: 0.0034,
   needs: [0.8, 0.05, 0.02, 0.01, 0.15, 0.01], prodMul: [1, 0.8, 0.8, 0.6, 1.6, 0.9], flying: false,
   aggression: 0.3, trade: 0.4, might: 1.1, magic: 1.4, align: 'light', startFactions: 2, startPop: [160, 230],
   aptBias: [0, 5, -10, 15, -5, -3], traitBias: { 3: 10, 6: 10 },
@@ -85,7 +85,7 @@ race({
 race({
   key: 'dwarf', name: '드워프', glyph: 'D', color: '#e8a050', layers: [L_UNDER],
   prefer: { [Tr.OREVEIN]: 4, [Tr.CAVE]: 2, [Tr.CRYSTAL]: 1 },
-  moveOverride: { [Tr.MOUNTAIN]: 2, [Tr.HILL]: 1 }, lifespan: [240, 40], adult: 30, growth: 0.003,
+  moveOverride: { [Tr.MOUNTAIN]: 2, [Tr.HILL]: 1 }, lifespan: [240, 40], adult: 30, growth: 0.0036,
   needs: [1, 0.1, 0.1, 0.1, 0, 0.03], prodMul: [0.9, 0.8, 1.4, 1.6, 0.7, 1.3], flying: false,
   aggression: 0.45, trade: 0.8, might: 1.3, magic: 0.6, align: 'light', startFactions: 2, startPop: [110, 180],
   aptBias: [5, 5, -10, 0, 10, -5], traitBias: { 4: 15, 8: 10 },
@@ -96,7 +96,7 @@ race({
 race({
   key: 'goblin', name: '고블린', glyph: 'g', color: '#a8d43a', layers: [L_UNDER],
   prefer: { [Tr.FUNGUS]: 3, [Tr.CAVE]: 2 },
-  moveOverride: {}, lifespan: [38, 8], adult: 10, growth: 0.009,
+  moveOverride: {}, lifespan: [38, 8], adult: 10, growth: 0.0065,
   needs: [1, 0.05, 0.02, 0.03, 0, 0.01], prodMul: [1, 1, 0.8, 0.9, 0.6, 0.8], flying: false,
   aggression: 0.8, trade: 0.3, might: 0.6, magic: 0.5, align: 'dark', startFactions: 2, startPop: [120, 200],
   aptBias: [-5, -10, 5, -5, 5, 20], traitBias: { 2: 15, 3: -10, 8: -15 },
@@ -118,7 +118,7 @@ race({
 race({
   key: 'orc', name: '오크', glyph: 'O', color: '#d0503e', layers: [L_SURFACE],
   prefer: { [Tr.HILL]: 3, [Tr.PLAIN]: 1, [Tr.DESERT]: 2, [Tr.TUNDRA]: 2 },
-  moveOverride: { [Tr.HILL]: 1 }, lifespan: [48, 9], adult: 13, growth: 0.006,
+  moveOverride: { [Tr.HILL]: 1 }, lifespan: [48, 9], adult: 13, growth: 0.005,
   needs: [1.2, 0.1, 0.03, 0.08, 0, 0.01], prodMul: [0.9, 1, 1, 1.2, 0.5, 0.8], flying: false,
   aggression: 0.95, trade: 0.25, might: 1.4, magic: 0.4, align: 'dark', startFactions: 2, startPop: [120, 190],
   aptBias: [5, 0, 5, -10, -5, 0], traitBias: { 0: 15, 3: -15, 8: -10 },

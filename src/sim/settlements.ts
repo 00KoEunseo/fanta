@@ -139,7 +139,7 @@ export function settlementMonth(w: World, s: Settlement): void {
   const cap = capacity(w, s);
   if (s.hunger === 0 && (needFood === 0 || s.stock[FOOD] > needFood * 1.5)) {
     let g = R.growth * (1 - s.pop / cap);
-    if (s.race === 'undead') g = R.growth * 0.6 * (1 - s.pop / cap) + Math.min(0.004, w.corpses / Math.max(1, s.pop) * 0.01);
+    if (s.race === 'undead') g = R.growth * 0.6 * (1 - s.pop / cap) + Math.min(0.0025, w.corpses / Math.max(1, s.pop) * 0.01);
     s.pop += s.pop * g;
   }
   if (s.pop > cap * 1.15) s.pop -= s.pop * 0.004;

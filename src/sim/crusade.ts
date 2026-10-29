@@ -370,6 +370,16 @@ function dlMonth(w: World): void {
   const dlf = w.factions[dl.faction];
   if (!dlf || !dlf.alive) return;
   spreadDLNews(w, dl, dlf);
+  // 공동의 적 앞에서: 마왕을 아는 빛의 나라들은 서로의 칼을 거둔다 (해마다)
+  if (w.t % 12 === 5) for (const a of w.factions) {
+    if (!a.alive || RACES[a.race].align !== 'light' || !knowsDL(w, a)) continue;
+    for (const k of Object.keys(a.wars)) {
+      const b = w.factions[+k];
+      if (!b || !b.alive || b.id < a.id || RACES[b.race].align !== 'light' || !knowsDL(w, b) || !rng.chance(0.25)) continue;
+      makePeace(w, a, b);
+      addNews(w, `마왕 ${dl.name}의 그림자 앞에서 ${a.name}과(와) ${b.name}이(가) 서로를 겨누던 칼을 거두었다. "지금 우리의 적은 저 너머에 있다."`, 3, 'politics', { facs: [a.id, b.id] });
+    }
+  }
   // 마계와 지하의 어둠이 마왕 밑으로 (소식을 들은 이들만)
   for (const f of w.factions) {
     if (!f.alive || f === dlf || f.flags.includes('dlvassal') || allianceOf(w, f) || !knowsDL(w, f)) continue;
@@ -464,7 +474,8 @@ export function crusadeMonth(w: World): void {
     if (!w.alliances.some(a => a.alive && a.enemy === e.id) && rng.chance(w.demonLord === e.id ? 0.08 : 0.03)) formAlliance(w, e);
     // 용사나 이름난 모험가가 스스로 토벌대를 꾸린다
     const waited = w.demonLord === e.id ? w.t - (w.stats.lastDemonLord ?? 0) >= 36 : true;
-    if (waited && !w.parties.some(p => !p.done && p.target === e.id) && rng.chance(0.03 * (w.demonLord === e.id ? dlResolve(w) : 1))) {
+    const urgent = w.demonLord === e.id && w.t - (w.stats.heavenCall ?? -999) <= 24 ? 4 : 1;
+    if (waited && !w.parties.some(p => !p.done && p.target === e.id) && rng.chance(0.03 * urgent * (w.demonLord === e.id ? dlResolve(w) : 1))) {
       const leaders = w.chars.filter(c => canFight(w, c, e) && (isHero(c) || c.fame >= 60) && approxDist(w, c, e) < 90 && (w.demonLord !== e.id || charKnowsDL(w, c)))
         .sort((a, b) => (isHero(b) ? 1000 : 0) + charPower(b, w) - (isHero(a) ? 1000 : 0) - charPower(a, w));
       if (leaders[0]) formParty(w, leaders[0], e);
@@ -506,7 +517,7 @@ function dlMarch(w: World, dl: Character, dlf: Faction, officers: Character[]): 
   const sanctum = w.settlements.find(s => s.alive && s.flags.includes('sanctum') && s.faction !== dlf.id);
   // 성역은 오래 군림하며 땅을 넓힌 마왕만 노린다. 한 번 실패하면 한 세대는 다시 엄두를 내지 못한다
   const reignY = (w.t - (w.stats.lastDemonLord ?? w.t)) / 12;
-  if (sanctum && reignY >= 20 && dlf.settlements.length >= 6 && w.t - (w.stats.lastSanctumMarch ?? -9999) >= 12 * 25 && rng.chance(0.15)) {
+  if (sanctum && reignY >= 30 && dlf.settlements.length >= 8 && w.t - (w.stats.lastSanctumMarch ?? -9999) >= 12 * 25 && rng.chance(0.15)) {
     for (const s of own) {
       const d = approxDist(w, s, sanctum);
       if (isFinite(d) && (!best || best.t !== sanctum || d < best.d)) best = { src: s, t: sanctum, d };
@@ -518,6 +529,7 @@ function dlMarch(w: World, dl: Character, dlf: Faction, officers: Character[]): 
     w.stats.lastSanctumMarch = w.t;
     const viaTower = w.towers.some(t => t.alive && t.demon && t.progress >= 200);
     addNews(w, `마왕 ${dl.name}의 군세가 ${viaTower ? '마왕탑을 타고' : '억지로 연 하늘 계단을 밟고'} 천상의 성역으로 진군한다! 열두 천사가 칼을 뽑았다.`, 5, 'doom', { pos: sanctum, facs: [dlf.id, tf.id], chars: [dl.id] });
+    heavenCall(w, dl, dlf);
   }
   if (!atWar(dlf, tf.id)) declareWar(w, dlf, tf, true);
   const cmd = officers.find(o => o.died < 0 && o.act.kind === 'idle' && o.l === best!.src.l && dist(o, best!.src) <= 8);
@@ -531,4 +543,21 @@ function dlMarch(w: World, dl: Character, dlf: Faction, officers: Character[]): 
   w.stats.dlMarches = (w.stats.dlMarches ?? 0) + 1;
   addNews(w, `마왕 ${dl.name}의 명으로 마계의 군세 ${Math.round(a.soldiers)}이(가) ${best.src.name}을(를) 떠나 ${tf.name}의 ${best.t.name}(으)로 진군하였다.${cmd ? ` 선봉은 ${charLabel(w, cmd)}이(가) 맡았다.` : ''}`,
     4, 'dark', { pos: best.src, facs: [dlf.id, tf.id], chars: [dl.id, ...(cmd ? [cmd.id] : [])] });
+}
+
+/** 하늘이 위태롭다: 빛의 나라들이 마왕의 땅으로 반격하고, 용사들이 일어서고, 천사들이 마왕군 앞을 막는다 */
+function heavenCall(w: World, dl: Character, dlf: Faction): void {
+  const rng = w.rngSim;
+  w.stats.heavenCall = w.t;
+  const joined: Faction[] = [];
+  for (const f of w.factions) {
+    if (!f.alive || RACES[f.race].align !== 'light' || f.race === 'angel' || !knowsDL(w, f) || f.flags.includes('dlvassal')) continue;
+    if (!atWar(f, dlf.id)) declareWar(w, f, dlf, true);
+    if (rng.chance(0.6) && launchAttack(w, f, dlf, 'holywar')) joined.push(f);
+  }
+  // 천사들은 모두 날아올라 마왕군을 막아선다
+  const horde = w.armies.filter(a => a.alive && a.faction === dlf.id).sort((a, b) => b.soldiers - a.soldiers)[0];
+  if (horde) for (const a of w.chars) if (a.died < 0 && a.race === 'angel' && a.seat !== undefined) a.angelTask = { kind: 'stand', target: horde.id, t: w.t };
+  addNews(w, joined.length ? `하늘이 위태롭다는 소식에 ${joined.slice(0, 4).map(f => f.name).join(', ')}${joined.length > 4 ? ` 등 ${joined.length}개 나라` : ''}이(가) 마왕의 땅으로 군대를 일으켰다. 마왕의 등 뒤를 치려는 것이다.`
+    : '하늘이 위태롭다는 소식이 퍼졌으나, 땅의 나라들은 저마다의 싸움에 묶여 움직이지 못하였다.', 4, 'hero', { facs: joined.map(f => f.id) });
 }

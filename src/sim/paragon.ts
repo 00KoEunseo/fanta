@@ -165,7 +165,7 @@ function resolveTask(w: World, c: Character, t: { kind: string; target: number }
     case 'defend': {
       const army = w.armies.find(a => a.alive && a.target === t.target && a.l === s.l && dist(a, s) <= 6);
       if (army) {
-        const cut = Math.min(army.soldiers, Math.round(charPower(c, w) * rng.float(0.8, 1.6)));
+        const cut = Math.round(Math.min(army.soldiers, charPower(c, w) * rng.float(0.8, 1.6)));
         army.soldiers -= cut;
         if (army.soldiers < 10) army.alive = false;
         c.fame += 12;

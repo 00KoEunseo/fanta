@@ -84,6 +84,7 @@ function armyPower(w: World, a: Army): number {
   if (f?.flags.includes('waaagh')) p *= 1.25;
   if (f?.flags.includes('ancient_magic')) p *= 1.2;
   if (f && hasFlag(f, 'blood_moon', w.t)) p *= 1.3;
+  if (f && hasFlag(f, 'demonpact', w.t)) p *= 1.15;
   return p;
 }
 
@@ -115,7 +116,9 @@ export function garrison(w: World, s: Settlement): number {
   // 천상의 성역은 천군과 열두 천사가 지킨다 (천사가 쓰러질수록 약해진다)
   if (s.flags.includes('sanctum')) {
     const angels = w.chars.filter(c => c.died < 0 && c.race === 'angel' && c.seat !== undefined);
-    d += 800 + angels.reduce((t, c) => t + charPower(c, w) * 2.5, 0);
+    d += 1200 + angels.reduce((t, c) => t + charPower(c, w) * 2.5, 0);
+    // 빛의 나라들이 보낸 의용군 (마왕을 아는 나라들)
+    for (const o of w.factions) if (o.alive && RACES[o.race].align === 'light' && o.race !== 'angel' && o.flags.includes('dlknown')) d += Math.sqrt(Math.max(0, o.military)) * 12;
   }
   // 영웅이 지키고 있다
   for (const c of w.chars) if (c.died < 0 && c.home === s.id && c.awakened.includes('hero') && c.act.kind === 'idle') d *= 1.3;

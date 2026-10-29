@@ -160,7 +160,7 @@ export function angelDuty(w: World, c: Character): boolean {
       charLog(w, c, `굶주린 ${s.name}을(를) 축복하였다.`, 2);
       addNews(w, `굶주린 ${s.name}의 곳간에 하늘의 빛이 내렸다. ${c.name}의 축복이었다.`, 2, 'hero', { pos: s, chars: [c.id] });
     } else if (T.kind === 'stand' && army) {
-      const cut = Math.min(army.soldiers, Math.round(c.stats.might * rng.float(1.5, 3)));
+      const cut = Math.round(Math.min(army.soldiers, c.stats.might * rng.float(1.5, 3)));
       army.soldiers -= cut;
       if (army.soldiers < 10) army.alive = false;
       charLog(w, c, `마왕의 군세 앞을 막아섰다.`, 3);
