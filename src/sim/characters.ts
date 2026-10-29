@@ -1226,7 +1226,8 @@ function namedQuota(w: World): { quota: Map<string, number>; members: Map<string
   }
   const quota = new Map<string, number>();
   // 수백 년을 사는 겨레(마족)는 한 번 이름을 얻으면 오래 남으니 최소 몫을 하나로 둔다
-  for (const [k, p] of pop) quota.set(k, Math.max(RACES[k.split(':')[1] as RaceKey].lifespan[0] > 300 ? 1 : 2, Math.min(50, Math.round(NAMED_BUDGET * p / Math.max(1, total)))));
+  // 작은 나라라도 군주는 따로 세워지니, 수백 년을 사는 겨레의 작은 나라(200명 아래)에는 최소 몫을 두지 않는다
+  for (const [k, p] of pop) { const longLived = RACES[k.split(':')[1] as RaceKey].lifespan[0] > 300; quota.set(k, Math.max(longLived ? (p >= 200 ? 1 : 0) : 2, Math.min(50, Math.round(NAMED_BUDGET * p / Math.max(1, total))))); }
   return { quota, members };
 }
 
@@ -1236,7 +1237,7 @@ export function lifecycleMonth(w: World): void {
   const crowd = alive.length;
   const { quota, members } = namedQuota(w);
   // 몫에 견주어 얼마나 찼는가 (1: 꼭 맞음)
-  const fill = (fid: number, race: string) => (members.get(`${fid}:${race}`) ?? 0) / (quota.get(`${fid}:${race}`) ?? (RACES[race as RaceKey]?.lifespan[0] > 300 ? 1 : 2));
+  const fill = (fid: number, race: string) => { const q = quota.get(`${fid}:${race}`) ?? (RACES[race as RaceKey]?.lifespan[0] > 300 ? 1 : 2); return q > 0 ? (members.get(`${fid}:${race}`) ?? 0) / q : 99; };
   for (const c of alive) {
     // 악마는 늙거나 앓아 죽지 않는다 (쓰러뜨려야 죽는다)
     if (!c.ancient && !c.archdemon && rng.chance(pDeathMonth(w, c))) {

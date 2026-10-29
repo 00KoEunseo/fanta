@@ -104,9 +104,9 @@ console.log(JSON.stringify({
     const named: Record<string, number> = {}; for (const c of alive) if (!c.archdemon && !c.paragon) named[c.race] = (named[c.race] ?? 0) + 1;
     const pop: Record<string, number> = {}; for (const s of w.settlements) if (s.alive) pop[s.race] = (pop[s.race] ?? 0) + s.pop;
     const totalPop = Object.values(pop).reduce((a, b) => a + b, 0), totalNamed = Object.values(named).reduce((a, b) => a + b, 0);
-    // 마계에 사는 인물 (고향이 마계인 이). 마왕을 치러 들어간 토벌대처럼 잠시 머무는 이는 세지 않는다
-    const demonL = alive.filter(c => !c.archdemon && !c.paragon && w.settlements[c.home]?.l === 4).length / Math.max(1, totalNamed);
-    const demonPop = w.settlements.filter(s => s.alive && s.l === 4).reduce((a, s) => a + s.pop, 0) / Math.max(1, totalPop);
+    // 마족의 이름난 이 비율 대 마족 인구 비율 (마계 고을을 정복한 지상 나라의 인물, 끌려간 노예, 토벌대, 악마는 세지 않는다)
+    const demonL = (named.majin ?? 0) / Math.max(1, totalNamed);
+    const demonPop = (pop.majin ?? 0) / Math.max(1, totalPop);
     const starved = Object.keys(pop).filter(r => pop[r] >= 10000 && (named[r] ?? 0) < 10);
     const tr: number[] = []; for (const f of w.factions) if (f.alive) for (const t of f.treaties) { const o = w.factions[t.with]; if (o && o.alive) tr.push(tradeRoute(w, f, o).d); }
     return { demonNamedShare: +demonL.toFixed(3), demonPopShare: +demonPop.toFixed(3), starved, popByRace: Object.fromEntries(Object.entries(pop).map(([k, v]) => [k, Math.round(v)])), namedByRace: named, tradeAvg: tr.length ? Math.round(tr.reduce((a, b) => a + b, 0) / tr.length) : 0 };

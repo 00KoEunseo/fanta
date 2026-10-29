@@ -45,6 +45,9 @@ const FIGHTERS = new Set(['전사', '기사', '모험가', '사냥꾼', '마법�
 export const OFFICER_TITLES = ['마왕의 검', '마왕의 그림자', '마왕의 불꽃', '마왕의 방패'];
 const DARK_KIN = ['majin', 'demon', 'darkelf', 'goblin', 'kobold', 'undead', 'orc'];
 
+/** 검증 도구가 밸런스 값을 바꿔 보는 자리 (게임에서는 비어 있다) */
+const TUNE = (): Record<string, number> => (globalThis as { __fantaTune?: Record<string, number> }).__fantaTune ?? {};
+
 /** 이 나라는 마왕의 강림을 알고 있는가 */
 export function knowsDL(w: World, f: Faction | undefined): boolean {
   const dl = w.chars[w.demonLord];
@@ -447,13 +450,14 @@ function dlMonth(w: World): void {
     }
   }
   // 마왕군의 진군: 해마다 꼴로 마계의 군세가 문을 넘는다
-  if (w.t - (w.stats.lastDemonLord ?? 0) >= 6 && rng.chance(1 / 14)) dlMarch(w, dl, dlf, officers);
+  if (w.t - (w.stats.lastDemonLord ?? 0) >= 6 && rng.chance(1 / (TUNE().dlMarch ?? 20))) dlMarch(w, dl, dlf, officers);
   // 가신들도 빛의 나라를 친다
   for (const f of w.factions) {
-    if (!f.alive || !f.flags.includes('dlvassal') || !rng.chance(1 / 36)) continue;
+    if (!f.alive || !f.flags.includes('dlvassal') || !rng.chance(1 / (TUNE().vassal ?? 72))) continue;
     const foes = w.factions.filter(o => o.alive && o.settlements.length && RACES[o.race].align === 'light');
     const e = foes.sort((a, b) => factionDistance(w, f, a) - factionDistance(w, f, b))[0];
-    if (!e || !isFinite(factionDistance(w, f, e))) continue;
+    // 가신은 제 곁의 빛의 나라만 친다
+    if (!e || !(factionDistance(w, f, e) < 50)) continue;
     if (!atWar(f, e.id)) declareWar(w, f, e, true);
     if (launchAttack(w, f, e, 'conquer')) addNews(w, `마왕군의 가신 ${f.name}이(가) ${e.name}을(를) 향해 군대를 일으켰다.`, 3, 'war', { facs: [f.id, e.id] });
   }

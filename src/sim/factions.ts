@@ -419,6 +419,9 @@ export function aggrieve(w: World, victim: Faction | undefined, culprit: Faction
 
 export function declareWar(w: World, a: Faction, b: Faction, silent = false): void {
   if (a.wars[b.id] !== undefined || a === b) return;
+  // 검증 도구: 전쟁이 어디서 시작되는지 센다 (게임에서는 꺼져 있다)
+  const trace = (globalThis as { __warTrace?: Record<string, number> }).__warTrace;
+  if (trace) { const at = (new Error().stack ?? '').split('\n')[2]?.trim().replace(/^at /, '').replace(/\(.*[\\/]/, '(') ?? '?'; trace[at] = (trace[at] ?? 0) + 1; }
   if (!Object.keys(a.wars).length) a.warWeariness = 0;
   if (!Object.keys(b.wars).length) b.warWeariness = 0;
   a.wars[b.id] = w.t; b.wars[a.id] = w.t;
@@ -525,6 +528,9 @@ export function tradeRoute(w: World, a: Faction, b: Faction): { d: number; sea: 
 // 이보다 먼 교역로는 열지 않는다 (먼 길은 짐이 상하고 도적이 많다)
 const TRADE_REACH = 80;
 
+/** 검증 도구가 밸런스 값을 바꿔 보는 자리 (게임에서는 비어 있다) */
+const TUNE = (): Record<string, number> => (globalThis as { __fantaTune?: Record<string, number> }).__fantaTune ?? {};
+
 const dlOf = (w: World) => (w.demonLord >= 0 ? w.chars[w.demonLord] : null);
 
 /** 국경을 맞댄 이웃 (해마다 다시 잰다: 땅을 훑는 일이라 매달 하기엔 무겁다) */
@@ -578,7 +584,7 @@ export function pWarMonth(w: World, a: Faction, b: Faction): number {
   const al = RACES[a.race].align, bl = RACES[b.race].align;
   const underDL = !!dl && (dl.faction === a.id || dl.faction === b.id || (a.flags.includes('dlvassal') && b.flags.includes('dlvassal')));
   let kin = 1;
-  if (al === 'dark' && bl === 'dark' && !underDL) kin = a.race === b.race ? 3 : 2.4;
+  if (al === 'dark' && bl === 'dark' && !underDL) kin = a.race === b.race ? TUNE().darkSame ?? 3 : TUNE().darkOther ?? 2.4;
   else if (al === 'light' && bl === 'light') kin = 0.7;
   // 망자는 산 자 모두를 미워한다
   if (a.race === 'undead' && b.race !== 'undead') kin *= 1.4;
@@ -598,7 +604,7 @@ export function pWarMonth(w: World, a: Faction, b: Faction): number {
   const pile = special === 1 ? Math.pow(0.7, Object.keys(b.wars).length) : 1;
   const hunger = a.flags.includes('food_crisis') ? 1.6 : 1;
   const young = a.tier === 0 ? 0.4 : 1;
-  const p = (Math.max(5, -r - 30) / 70) * Math.max(0.05, aggr) * powerF * distF * warsF * pile * hunger * special * young * kin * faithWarFactor(w, a, b) * 0.008;
+  const p = (Math.max(5, -r - 30) / 70) * Math.max(0.05, aggr) * powerF * distF * warsF * pile * hunger * special * young * kin * faithWarFactor(w, a, b) * (TUNE().war ?? 0.006);
   return Math.min(0.05, p);
 }
 

@@ -20,6 +20,8 @@
 | `npx tsx scripts/qa/demon-check.ts <시드들> <년>` | 악마 예순여섯의 행적, 마족의 수와 노는 비율 | 약 3분 |
 | `npx tsx scripts/qa/doom-rate.ts <세계 수> <년>` | 세계 여럿을 돌려 멸망 빈도, 봉인 넷 이상인 달, 전쟁·인물 분포를 잰다 | 24개면 약 15분 |
 | `npx tsx scripts/qa/issues.ts <시드들> <년>` | 4차 점검 지표: 전쟁 거리·이웃 비율, 대치·야전·스쳐 지나간 군대, 엇갈린 주둔지, 고대 용·원한·수호룡, 천사의 거취, 마족 수, 반란의 수명과 동참, 심연의 군주, 하늘 용, 성역, 용사와 마왕 | 세계 6개 300년이면 약 40분 |
+| `FANTA_TUNE='{"war":0.006}' npx tsx scripts/qa/issues.ts …` | 밸런스 값(war, darkSame, darkOther, vassal, dlMarch)을 바꿔 같은 세계에서 견준다. 세계마다 흐름이 크게 갈리니 세계 8개 이상으로 | 세계 8개 200년 약 50분 |
+| `npx tsx scripts/qa/demon-bio.ts` | 악마 일대기가 얼마나 채워지는가 | 약 5분 |
 | `npx tsx scripts/qa/goal-odds.ts <king\|hero\|dl\|all> <생애 수>` | 왕·용사·마왕을 목표로 키울 때 닿는 확률과 실패한 까닭 | 10생애 약 10분 |
 | `npx tsx scripts/qa/life-density.ts <생애 수> <시작 번호>` | 탄생 모드의 밀도: 어린 시절 선택지 수·종류, 길 위의 일 종류, 반역·옥살이·추방·함락 소식 | 16생애 약 15분 |
 | `npx tsx scripts/qa/compat.ts <저장 파일>` | 예전 코드로 만든 저장 파일을 지금 코드로 불러와 30년 진행·화면·재저장을 확인한다 | 약 1분 |

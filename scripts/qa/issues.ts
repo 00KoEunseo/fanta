@@ -7,6 +7,8 @@ import { dist, yearOf } from '../../src/sim/state';
 import { facDist, isNeighbor } from '../../src/sim/factions';
 import { RACES } from '../../src/data/races';
 const argv: string[] = (globalThis as any).process.argv;
+// 밸런스 값 바꿔 보기: FANTA_TUNE='{"war":0.006}'
+{ const t = (globalThis as any).process.env.FANTA_TUNE; if (t) (globalThis as any).__fantaTune = JSON.parse(t); }
 const years = +(argv[3] ?? 300);
 const agg: Record<string, number[]> = {};
 const put = (k: string, v: number) => (agg[k] ??= []).push(v);
