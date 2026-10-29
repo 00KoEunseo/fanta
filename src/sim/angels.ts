@@ -2,7 +2,9 @@
 import { makeName, uniqueName } from '../data/names';
 import { addNews, charLog } from './news';
 import type { Character, Faction, Settlement, World } from './state';
-import { clamp, leaderOf } from './helpers';
+import { addFacRel, clamp, leaderOf } from './helpers';
+import { RACES } from '../data/races';
+import { hooks } from './hooks';
 import { createCharacter, setTravel } from './characters';
 
 export const ANGEL_LIFESPAN = 300;
@@ -134,22 +136,24 @@ export { leaderOf };
 // ───────────── 세상을 지키는 천사의 일
 
 /** 천사의 임무: 역병을 거두고, 굶주린 고을을 축복하고, 마왕의 군세를 막아선다 */
-export interface AngelTask { kind: 'heal' | 'bless' | 'stand'; target: number; t: number }
+export interface AngelTask { kind: 'heal' | 'bless' | 'stand' | 'redeem'; target: number; t: number }
 
 /** 매달 (천사 한 명, 할 일이 없을 때): 임무를 맡거나 해낸다. 무언가 했으면 true */
 export function angelDuty(w: World, c: Character): boolean {
   const rng = w.rngSim;
   const T = c.angelTask;
   if (T) {
-    const s = w.settlements[T.target];
+    const soul = T.kind === 'redeem' ? w.chars[T.target] : undefined;
+    const s = T.kind === 'redeem' ? undefined : w.settlements[T.target];
     const army = T.kind === 'stand' ? w.armies[T.target] : undefined;
-    const pos = army ?? s;
-    if (!pos || (s && !s.alive) || (army && !army.alive) || w.t - T.t > 24) { c.angelTask = undefined; return false; }
+    const pos = soul ?? army ?? s;
+    if (!pos || (s && !s.alive) || (army && !army.alive) || (soul && soul.died >= 0) || w.t - T.t > 24) { c.angelTask = undefined; return false; }
     if (c.l !== pos.l || Math.hypot(c.x - pos.x, c.y - pos.y) > 3) {
       if (c.act.kind === 'idle') setTravel(w, c, pos, 'quest');
       return true;
     }
     c.angelTask = undefined;
+    if (T.kind === 'redeem' && soul) { redeem(w, c, soul); return true; }
     if (T.kind === 'heal' && s && s.plague > 0) {
       s.plague = Math.max(0, Math.floor(s.plague * 0.3));
       c.fame += 5;
@@ -177,8 +181,52 @@ export function angelDuty(w: World, c: Character): boolean {
   if (sick && rng.chance(0.5)) { c.angelTask = { kind: 'heal', target: sick.id, t: w.t }; return true; }
   const hungry = w.settlements.filter(s => s.alive && s.hunger > 3 && RACES_LIGHT(s.race)).sort((a, b) => b.hunger - a.hunger)[0];
   if (hungry) { c.angelTask = { kind: 'bless', target: hungry.id, t: w.t }; return true; }
+  // 어둠에 물든 이를 찾아가 빛으로 돌이킨다 (어둠의 군주를 먼저)
+  if (rng.chance(0.18)) {
+    const souls = w.chars.filter(o => o.died < 0 && !o.isPlayer && o.l <= 3 && o.race !== 'angel' && o.race !== 'demon' && o.race !== 'dragon' && o.race !== 'undead' && !o.archdemon && !o.paragon && !o.officer
+      && w.demonLord !== o.id && (o.awakened.includes('seed') || o.traits[3] < 25 || (RACES_DARK(o.race) && w.factions[o.faction]?.leader === o.id)) && !w.stats[`redeemTried${o.id}`]);
+    const soul = rng.weighted(souls, o => (w.factions[o.faction]?.leader === o.id ? 4 : 1) * (o.awakened.includes('seed') ? 2 : 1));
+    if (soul) { w.stats[`redeemTried${soul.id}`] = w.t; c.angelTask = { kind: 'redeem', target: soul.id, t: w.t }; return true; }
+  }
   return false;
 }
 
 /** 천사가 돌보는 이들: 어둠의 종족이 아닌 고을 */
 const RACES_LIGHT = (r: string) => r !== 'majin' && r !== 'demon' && r !== 'undead';
+
+const RACES_DARK = (r: string) => r === 'orc' || r === 'goblin' || r === 'darkelf' || r === 'majin';
+
+/** 회개: 천사가 어둠에 물든 이 앞에 내려와 빛으로 돌이키려 한다. 군주가 돌아서면 나라도 길을 바꾼다 */
+function redeem(w: World, a: Character, o: Character): void {
+  const rng = w.rngSim;
+  const p = 0.35 + (a.stats.charisma - 50) / 200 - (o.traits[9] - 50) / 200 - (o.awakened.includes('seed') ? 0.1 : 0);
+  if (!rng.chance(Math.max(0.1, Math.min(0.7, p)))) {
+    charLog(w, o, `천사 ${a.name}이(가) 찾아와 손을 내밀었으나 뿌리쳤다.`, 2);
+    addNews(w, `${a.epithet ? a.epithet + ' ' : ''}${a.name}이(가) ${o.name} 앞에 내려와 빛으로 돌아오라 하였으나, ${o.name}은(는) 비웃으며 등을 돌렸다.`, 2, 'hero', { pos: o, chars: [a.id, o.id] });
+    return;
+  }
+  o.traits[3] = clamp(o.traits[3] + 35);
+  o.traits[4] = clamp(o.traits[4] + 15);
+  o.awakened = o.awakened.filter(k => k !== 'seed');
+  o.honor += 10;
+  a.fame += 8;
+  charLog(w, o, `천사 ${a.name}의 빛 앞에 무릎을 꿇고 회개하였다.`, 4);
+  charLog(w, a, `${o.name}을(를) 빛으로 돌이켰다.`, 3);
+  const f = w.factions[o.faction];
+  const ruler = !!f && f.leader === o.id;
+  const deeds: string[] = [];
+  if (ruler && f) {
+    // 나라가 길을 바꾼다: 마왕의 깃발을 내리고, 사슬을 풀고, 빛의 나라들과 화해한다
+    if (f.flags.includes('dlvassal')) { f.flags = f.flags.filter(x => x !== 'dlvassal'); deeds.push('마왕의 깃발을 내렸다'); }
+    if (!f.flags.includes('abolished')) { f.flags.push('abolished'); deeds.push('노예들의 사슬을 풀었다'); }
+    let made = 0;
+    for (const e of w.factions) {
+      if (!e.alive || e === f || RACES[e.race].align !== 'light') continue;
+      addFacRel(w, f, e, 25);
+      if (f.wars[e.id] !== undefined && rng.chance(0.6)) { hooks.makePeace(w, f, e); made++; }
+    }
+    if (made) deeds.push(`빛의 나라 ${made}곳과 칼을 거두었다`);
+  }
+  addNews(w, `${a.epithet ? a.epithet + ' ' : ''}${a.name}이(가) ${f && ruler ? `${f.name}의 ` : ''}${o.name} 앞에 내려왔다. 빛 속에서 ${o.name}이(가) 무릎을 꿇고 회개하였다.${deeds.length ? ` 그날로 ${deeds.join(', ')}.` : ''}`, ruler ? 4 : 3, 'hero', { pos: o, chars: [a.id, o.id], facs: f ? [f.id] : [] });
+}
+

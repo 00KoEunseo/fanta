@@ -1,6 +1,7 @@
 import { caravanMaster, sendCaravan } from './caravan';
 import { borderFriction, clearWar, frictionReasons, negotiate, setPeace, setTransfer } from './warfare';
 import { demonsServing } from './demons';
+import { hooks } from './hooks';
 import { CAMP_MAX, ensureCamp, sendToCamp } from './camps';
 import { faithWarFactor, faithWarReasons } from './religion';
 import { inheritKnown, knownYears, knows } from './contact';
@@ -279,7 +280,7 @@ function backstab(w: World, f: Faction, nb: Faction[]): void {
   const ld = leaderOf(w, f);
   if (!ld || ld.isPlayer || Object.keys(f.wars).length > 1 || f.race === 'angel') return;
   const t = ld.traits;
-  const treachery = (t[AMBITION] - 55) / 45 + (40 - t[LOYALTY]) / 60 + (40 - t[COMPASSION]) / 80 + (ld.apt[APT_TRAITOR] - 50) / 100;
+  const treachery = (t[AMBITION] - 55) / 45 + (40 - t[LOYALTY]) / 60 + (40 - t[COMPASSION]) / 80 + (ld.apt[APT_TRAITOR] - 50) / 100 + (f.race === 'darkelf' ? 0.3 : 0);
   if (treachery <= 0.1) return;
   // 노리는 상대: 국경을 맞댔거나 가까운 이웃, 그리고 교역으로 손잡은 나라
   const cands = w.factions.filter(o => o !== f && o.alive && (nb.includes(o) || isNeighbor(w, f, o) || f.treaties.some(x => x.with === o.id)));
@@ -451,6 +452,7 @@ function warReason(w: World, a: Faction, b: Faction, ld: Character): string {
   if (t[COMPASSION] < 30) why.push(`${ld.name}은(는) 피를 원하였다.`, `${ld.name}에게 전쟁은 사냥과 다르지 않았다.`, `잔혹한 ${ld.name}은(는) 명분조차 꾸미지 않았다.`);
   if (a.military > b.military * 2) why.push('약한 이웃의 땅이 탐났다.', `${b.name}의 군세가 보잘것없다는 보고가 올라왔다.`);
   const al = RACES[a.race].align, bl = RACES[b.race].align;
+  if (al === 'dark' && bl === 'dark') why.push(a.race === b.race ? `${RACES[a.race].name}의 우두머리 자리는 하나뿐이었다. ${ld.name}은(는) ${b.name}의 깃발을 꺾어 무리를 하나로 삼키려 하였다.` : `어둠의 땅에도 주인은 하나여야 했다. ${ld.name}은(는) ${b.name}을(를) 짓밟아 힘을 보이려 하였다.`, '굶주린 늑대들은 서로의 목을 먼저 노렸다.');
   if (al !== 'neutral' && bl !== 'neutral' && al !== bl) why.push('빛과 어둠은 한 하늘을 이고 살 수 없었다.', `${RACES[a.race].name}의 사제들이 성전을 부르짖었다.`);
   if (raceAffinity(a.race, b.race) < -40) why.push(`${RACES[a.race].name}과(와) ${RACES[b.race].name}의 오랜 원한이 다시 불붙었다.`, `${RACES[a.race].name}의 노래는 ${RACES[b.race].name}을(를) 원수로 기억한다.`);
   if (!why.length || Object.keys(a.wars).length === 0) why.push('국경의 분쟁이 끝내 전쟁으로 번졌다.', '국경 마을의 우물 하나를 두고 시작된 다툼이 전쟁이 되었다.', '변경의 소규모 충돌이 걷잡을 수 없이 커졌다.', '사냥터를 두고 벌어진 시비가 피를 불렀다.');
@@ -572,7 +574,15 @@ export function pWarMonth(w: World, a: Faction, b: Faction): number {
   if (dl && dl.faction === b.id && RACES[a.race].align === 'light' && knowsDL(w, a)) special = 3;
   if (a.flags.includes('dlvassal') && RACES[b.race].align === 'light') special = 2.5;
   if (a.flags.includes('dlvassal') && dl && b.id === dl.faction) return 0;
-  if (r > -30 && special === 1) return 0;
+  // 어둠은 수가 많지만 서로 물어뜯는다 (마왕이 묶어 두지 않는 한). 빛은 수가 적지만 서로 덜 싸운다
+  const al = RACES[a.race].align, bl = RACES[b.race].align;
+  const underDL = !!dl && (dl.faction === a.id || dl.faction === b.id || (a.flags.includes('dlvassal') && b.flags.includes('dlvassal')));
+  let kin = 1;
+  if (al === 'dark' && bl === 'dark' && !underDL) kin = a.race === b.race ? 3 : 2.4;
+  else if (al === 'light' && bl === 'light') kin = 0.7;
+  // 망자는 산 자 모두를 미워한다
+  if (a.race === 'undead' && b.race !== 'undead') kin *= 1.4;
+  if (r > (kin > 1.5 ? 0 : -30) && special === 1) return 0;
   const ld = leaderOf(w, a);
   const aggr = RACES[a.race].aggression * 0.6 + (ld ? ((100 - ld.traits[COMPASSION]) + ld.traits[AMBITION] + ld.traits[PRIDE] * 0.5) / 250 : 0.3)
     - (ld ? ld.traits[PRUDENCE] / 400 : 0);
@@ -588,7 +598,7 @@ export function pWarMonth(w: World, a: Faction, b: Faction): number {
   const pile = special === 1 ? Math.pow(0.7, Object.keys(b.wars).length) : 1;
   const hunger = a.flags.includes('food_crisis') ? 1.6 : 1;
   const young = a.tier === 0 ? 0.4 : 1;
-  const p = (Math.max(5, -r - 30) / 70) * Math.max(0.05, aggr) * powerF * distF * warsF * pile * hunger * special * young * faithWarFactor(w, a, b) * 0.008;
+  const p = (Math.max(5, -r - 30) / 70) * Math.max(0.05, aggr) * powerF * distF * warsF * pile * hunger * special * young * kin * faithWarFactor(w, a, b) * 0.008;
   return Math.min(0.05, p);
 }
 
@@ -951,6 +961,7 @@ export function homelessMonth(w: World, c: Character): void {
 
 // 강화 조건으로 고을을 넘길 때 쓴다
 setTransfer((w, s, f) => transferSettlement(w, s, f));
+hooks.makePeace = (w, a, b) => makePeace(w, a, b);
 setPeace((w, a, b) => makePeace(w, a, b));
 
 /** 나라를 잃은 천사들: 살아남은 자리의 천사들이 모여 빼앗긴 성역을 되찾으러 내려간다 (두 해에 한 번꼴). 되찾으면 천사의 나라가 다시 선다 */

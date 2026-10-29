@@ -102,8 +102,10 @@ export function demonMonth(w: World, c: Character): void {
   // 둥지 주변을 어슬렁거린다
   if (task.kind === 'roam') {
     if (rng.chance(0.35)) { const lines = NATURE_LINES[natureOf(c)]; charLog(w, c, rng.pick(lines), 2); }
+    // 대개는 둥지 곁에 머문다 (길을 찾는 일은 무겁다: 셋에 하나만 실제로 거닌다)
+    if (!rng.chance(0.3)) return;
     const L = w.layers[A.lair.l];
-    const to = { l: A.lair.l, x: clamp(A.lair.x + rng.int(-8, 8), 1, L.w - 2), y: clamp(A.lair.y + rng.int(-8, 8), 1, L.h - 2) };
+    const to = { l: A.lair.l, x: clamp(A.lair.x + rng.int(-6, 6), 1, L.w - 2), y: clamp(A.lair.y + rng.int(-6, 6), 1, L.h - 2) };
     setTravel(w, c, to, 'quest');
     return;
   }
